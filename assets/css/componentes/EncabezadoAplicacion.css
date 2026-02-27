@@ -1,0 +1,281 @@
+/* Rol: Encabezado superior y botones iconográficos */
+
+.app-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 0;
+  margin: 0;
+  background: linear-gradient(125deg, var(--color-primary-700), var(--color-primary-500));
+  color: var(--color-text-inverso);
+  box-shadow: 0 24px 50px rgba(25, 47, 104, 0.35);
+  overflow: visible;
+  padding: 1rem;
+  min-height: 40px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  z-index: 1000;
+}
+
+.app-header::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 18% 24%, rgba(255, 255, 255, 0.18), transparent 45%),
+    radial-gradient(circle at 78% 18%, rgba(255, 255, 255, 0.12), transparent 48%);
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+.app-header .title {
+  margin: 0;
+  font-size: clamp(19.2px, 28.8px + 9.6px, 25.6px);
+  font-weight: 700;
+  flex: 1;
+  text-align: center;
+  letter-spacing: 0.32px;
+  text-shadow: 0 6px 20px rgba(10, 18, 46, 0.35);
+}
+
+
+.icon-btn {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-text-inverso);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+  backdrop-filter: blur(4px);
+  text-decoration: none;
+}
+
+/* Bloque izquierdo: logo */
+.Encabezado-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.Encabezado-Logotipo {
+  height: 34px;
+  width: auto;
+  object-fit: contain;
+  background-color: transparent;
+}
+
+
+.icon-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2.2;
+}
+
+.icon-btn svg.icon-fill {
+  fill: currentColor;
+  stroke: none;
+}
+
+.icon-btn:hover {
+  transform: translateY(-1px) scale(1.02);
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.38);
+  box-shadow: 0 12px 25px rgba(9, 20, 54, 0.2);
+}
+
+.icon-btn:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+.icon-btn:focus-visible {
+  outline: 3px solid rgba(255, 255, 255, 0.55);
+  outline-offset: 2px;
+}
+
+.icon-btn .indicador-bonos {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.icon-btn.tiene-bonos svg {
+  opacity: 0.25;
+  transition: opacity 0.2s ease;
+}
+
+.icon-btn.tiene-bonos .indicador-bonos {
+  opacity: 1;
+}
+
+.icon-btn.alerta-pendiente {
+  background: linear-gradient(160deg, rgba(255, 220, 173, 0.95), rgba(255, 193, 120, 0.95));
+  border-color: rgba(255, 177, 66, 0.65);
+  color: #7a3d00;
+}
+
+.icon-btn.alerta-pendiente:hover {
+  background: linear-gradient(160deg, rgba(255, 208, 150, 0.98), rgba(255, 181, 92, 0.98));
+  border-color: rgba(255, 160, 40, 0.8);
+}
+
+#btn-fullscreen {
+  display: flex;
+  gap: 0;
+}
+
+#btn-fullscreen .icon {
+  width: 24px;
+  height: 24px;
+  stroke-width: 2.4;
+}
+
+#btn-fullscreen .icon-exit {
+  display: none;
+}
+
+#btn-fullscreen.fs-exit .icon-enter {
+  display: none;
+}
+
+#btn-fullscreen.fs-exit .icon-exit {
+  display: inline;
+}
+
+.header-machine-filter,
+.header-operaciones-filter,
+.header-pieza-filter,
+.header-pedido-filter {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 4px;
+  border: 3px solid var(--color-primary-300);
+  border-radius: 999px;
+  padding: 4px 8px;
+  /* Ensanchar un poco el contenedor del combo de máquinas */
+  min-width: 220px;
+  flex: 0 0 auto;
+}
+
+.header-filter-label {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.app-header .header-machine-filter .selector-multiple,
+.app-header .header-machine-filter .selector-multiple {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Selector de operación con ancho fijo (135px en rem) */
+.app-header .header-operaciones-filter .selector-multiple,
+.app-header .header-operaciones-filter .selector-multiple {
+  width: 9rem;
+  flex: 0 0 9rem;
+  min-width: 9rem;
+}
+
+/* En el filtro de operaciones hay un checkbox adicional (GFH):
+   evitar que el texto parta línea y permitir que el selector se adapte. */
+.app-header .header-operaciones-filter .checkbox-container,
+.app-header .header-operaciones-filter .checkbox-container {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.app-header .header-operaciones-filter .checkbox-container .header-filter-label,
+.app-header .header-operaciones-filter .checkbox-container .header-filter-label {
+  white-space: nowrap;
+}
+
+/* Hacer que el panel del combo de máquinas sea un poco más ancho
+   y evitar que los nombres de máquinas se partan en dos líneas */
+.app-header .header-machine-filter .selector-panel,
+.app-header .header-operaciones-filter .selector-panel,
+.app-header .header-machine-filter .selector-panel,
+.app-header .header-operaciones-filter .selector-panel {
+  /* más ancho que el ancho del botón y que el mínimo global */
+  width: max(100%, 320px);
+  max-width: 240px; /* límite razonable en pantallas pequeñas */
+}
+
+.app-header .header-machine-filter .selector-opcion-label,
+.app-header .header-operaciones-filter .selector-opcion-label,
+.app-header .header-machine-filter .selector-opcion-label,
+.app-header .header-operaciones-filter .selector-opcion-label {
+  white-space: nowrap; /* mantener una sola línea */
+}
+
+.app-header .header-machine-filter .selector-opcion-label span,
+.app-header .header-operaciones-filter .selector-opcion-label span,
+.app-header .header-machine-filter .selector-opcion-label span,
+.app-header .header-operaciones-filter .selector-opcion-label span {
+  overflow: hidden;
+  text-overflow: ellipsis; /* elipsis si aún no cabe */
+}
+
+@media (max-width: 640px) {
+  .app-header {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .app-header .title {
+    order: 3;
+  }
+
+  .app-header .header-machine-filter,
+  .app-header .header-operaciones-filter {
+    flex: 1 1 100%;
+    min-width: 0;
+    order: 4;
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .icon-btn {
+    transition: none;
+  }
+}
+
+/* Host para el widget de sesión (mismo look que Generador de Etiquetas) */
+.Encabezado-UserHost {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  flex-shrink: 0;
+}

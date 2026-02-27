@@ -1,0 +1,374 @@
+/* Rol: Variables globales y resets generales */
+
+:root {
+  /* Paleta principal */
+  --color-primary-50: rgb(245, 248, 255);
+  --color-primary-100: rgb(232, 240, 255);
+  --color-primary-200: rgb(199, 219, 255);
+  --color-primary-300: rgb(158, 191, 251);
+  --color-primary-400: rgb(110, 155, 241);
+  --color-primary-500: rgb(63, 120, 224);
+  --color-primary-600: rgb(45, 94, 188);
+  --color-primary-700: rgb(33, 71, 149);
+  --color-primary-800: rgb(27, 60, 124);
+  --color-primary-900: rgb(20, 45, 91);
+  --color-secondary-100: rgb(255, 255, 230);
+  --color-secondary-200: rgb(255, 255, 200);
+  --color-secondary-300: rgb(250, 250, 180);
+  --color-secondary-400: rgb(220, 220, 150);
+  --color-secondary-500: rgb(190, 190, 120);
+  --color-secondary-600: rgb(160, 160, 90);
+  --color-secondary-700: rgb(130, 130, 60);
+  --color-secondary-800: rgb(100, 100, 30);
+  --color-secondary-900: rgb(70, 70, 0);
+  --color-accent: #ffae46;
+  --color-accent-soft: rgba(255, 174, 70, 0.16);
+  --color-success: #38c96b;
+  --color-warning: #ff9f40;
+  --color-borde-grupo: #0d6efd;
+  --color-borde-material: #198754;
+  --color-borde-cnc: #fd7e14;
+
+  /* Texto y superficies */
+  --color-text-primario: #19263b;
+  --color-text-inverso: #ffffff;
+  --color-page-bg: #eef2fb;
+  --color-page-gradient:
+    radial-gradient(circle at top left, rgba(94, 132, 255, 0.2), transparent 45%),
+    radial-gradient(circle at bottom right, rgba(34, 204, 219, 0.18), transparent 40%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.65), rgba(244, 247, 255, 0.85));
+  --color-surface: rgba(255, 255, 255, 0.82);
+  --color-surface-intensa: #ffffff;
+  --color-surface-suave: rgba(255, 255, 255, 0.68);
+  --color-border-suave: rgba(90, 122, 185, 0.25);
+  --color-border-intenso: rgba(29, 64, 139, 0.45);
+
+  /* Botones y sombras reutilizables */
+  --color-boton-fondo: #3f78e0;
+  --color-boton-hover: #2d5ebc;
+  --color-boton-texto: #ffffff;
+  --shadow-suave: 0 18px 45px rgba(21, 44, 92, 0.12);
+  --shadow-intensa: 0 30px 60px rgba(16, 38, 85, 0.3);
+  --shadow-flotante: 0 14px 40px rgba(18, 40, 88, 0.24);
+
+  /* Radios */
+  --radio-lg: 24px;
+  --radio-md: 18px;
+  --radio-sm: 12px;
+
+  /* Configuración de columnas para órdenes */
+  --orden-gap: 8px;
+  --orden-w-grupo: 250px;
+  --orden-w-trabajo: 250px;
+  --orden-w-referencia: 110px;
+  --orden-w-stock-mrp-ppieza: 80px;
+  --orden-w-stock-real-ppieza: 80px;
+  --orden-w-tipo: 85px;
+  --orden-w-mp: 115px;
+  --orden-w-ctd: 80px;
+  --orden-w-stock-mrp: 80px;
+  --orden-w-stock-real: 80px;
+  --orden-w-stock-sga: 80px;
+  --orden-w-cnc: 110px;
+  --orden-w-fecha-sec: 90px;
+  --orden-w-fecha-max: 90px;
+  --orden-w-t-cnc: 80px;
+  --orden-w-t-total: 80px;
+  --orden-w-t-incidencia: 300px;
+  --font-base: 'Segoe UI', 'Inter', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+
+  /* Configuración tipográfica global */
+  --texto-titulo-principal-fuente: var(--font-base);
+  --texto-titulo-principal-tamano: clamp(2.6rem, 2.4vw + 1.6rem, 3.8rem);
+  --texto-titulo-principal-peso: 700;
+  --texto-titulo-principal-color: #ffffff;
+  --texto-titulo-principal-espaciado: -0.02em;
+  --texto-titulo-seccion-fuente: var(--font-base);
+  --texto-titulo-seccion-tamano: clamp(2.1rem, 1.9vw + 1.3rem, 3.2rem);
+  --texto-titulo-seccion-peso: 600;
+  --texto-titulo-seccion-color: var(--color-text-primario);
+  --texto-titulo-seccion-espaciado: -0.015em;
+  --texto-subtitulo-fuente: var(--font-base);
+  --texto-subtitulo-tamano: 26PX;
+  --texto-subtitulo-peso: 600;
+  --texto-subtitulo-color: var(--color-text-primario);
+  --texto-subtitulo-espaciado: -0.01em;
+  --texto-encabezado-menor-fuente: var(--font-base);
+  --texto-encabezado-menor-tamano: clamp(1.5rem, 0.9vw + 1rem, 2rem);
+  --texto-encabezado-menor-peso: 600;
+  --texto-encabezado-menor-color: var(--color-text-primario);
+  --texto-encabezado-menor-espaciado: 0;
+  --texto-parrafo-fuente: var(--font-base);
+  --texto-parrafo-tamano: 20px;
+  --texto-parrafo-peso: 400;
+  --texto-parrafo-color: var(--color-text-primario);
+  --texto-parrafo-altura-linea: 1.6;
+  --texto-parrafo-espaciado: 0.01em;
+  --texto-pequeno-fuente: var(--font-base);
+  --texto-pequeno-tamano: 1.3rem;
+  --texto-pequeno-peso: 400;
+  --texto-pequeno-color: rgba(25, 38, 59, 0.75);
+  --texto-pequeno-altura-linea: 1.5;
+  --texto-interactivo-fuente: var(--font-base);
+  --texto-interactivo-tamano: 1.5rem;
+  --texto-interactivo-peso: 600;
+  --texto-interactivo-color: var(--color-primary-600);
+  --texto-interactivo-color-hover: var(--color-primary-500);
+  --texto-interactivo-subrayado: none;
+  --texto-destacado-color: var(--color-primary-500);
+  --texto-destacado-fondo: rgba(63, 120, 224, 0.08);
+  --texto-destacado-borde: rgba(63, 120, 224, 0.25);
+  --texto-advertencia-color: var(--color-warning);
+  --texto-exito-color: var(--color-success);
+  --texto-inverso-color: var(--color-text-inverso);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-base);
+  color: var(--color-text-primario);
+  background: var(--color-page-gradient);
+  background-color: var(--color-page-bg);
+  min-height: auto;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(circle at 12% 20%, rgba(255, 255, 255, 0.4), transparent 55%),
+    radial-gradient(circle at 88% 18%, rgba(82, 122, 255, 0.12), transparent 50%),
+    radial-gradient(circle at 18% 82%, rgba(90, 232, 231, 0.12), transparent 52%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  color: inherit;
+}
+
+::selection {
+  background: rgba(63, 120, 224, 0.18);
+  color: var(--color-primary-800);
+}
+
+.sr-only,
+.solo-lectura {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+html.zoom-locked,
+body.zoom-locked {
+  overflow: hidden;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  margin: 2px;
+}
+
+::-webkit-scrollbar-track:horizontal {
+  margin-left: 16px;
+  margin-right: 16px;
+}
+
+::-webkit-scrollbar-track:vertical {
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, rgba(63, 120, 224, 0.45), rgba(33, 71, 149, 0.65));
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, rgba(63, 120, 224, 0.65), rgba(33, 71, 149, 0.85));
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.is-hidden {
+  display: none !important;
+}
+
+/* Tipografías para títulos y textos jerárquicos */
+h1,
+.texto-titulo-principal {
+  font-family: var(--texto-titulo-principal-fuente);
+  font-size: var(--texto-titulo-principal-tamano);
+  font-weight: var(--texto-titulo-principal-peso);
+  color: var(--texto-titulo-principal-color);
+  letter-spacing: var(--texto-titulo-principal-espaciado);
+  line-height: 1.2;
+  margin: 0 0 1.2rem;
+}
+
+h2,
+.texto-titulo-seccion {
+  font-family: var(--texto-titulo-seccion-fuente);
+  font-size: var(--texto-titulo-seccion-tamano);
+  font-weight: var(--texto-titulo-seccion-peso);
+  color: var(--texto-titulo-seccion-color);
+  letter-spacing: var(--texto-titulo-seccion-espaciado);
+  line-height: 1.25;
+  margin: 0 0 1rem;
+}
+
+h3,
+.texto-subtitulo {
+  font-family: var(--texto-subtitulo-fuente);
+  font-size: var(--texto-subtitulo-tamano);
+  font-weight: var(--texto-subtitulo-peso);
+  color: var(--texto-subtitulo-color);
+  letter-spacing: var(--texto-subtitulo-espaciado);
+  line-height: 1.3;
+  margin: 0 0 0.9rem;
+}
+
+h4,
+h5,
+h6,
+.texto-encabezado-menor {
+  font-family: var(--texto-encabezado-menor-fuente);
+  font-size: var(--texto-encabezado-menor-tamano);
+  font-weight: var(--texto-encabezado-menor-peso);
+  color: var(--texto-encabezado-menor-color);
+  letter-spacing: var(--texto-encabezado-menor-espaciado);
+  line-height: 1.35;
+  margin: 0 0 0.8rem;
+}
+
+/* Texto base para párrafos y cuerpos de contenido */
+p,
+.texto-parrafo {
+  height: auto;
+  font-family: var(--texto-parrafo-fuente);
+  font-size: var(--texto-parrafo-tamano);
+  font-weight: var(--texto-parrafo-peso);
+  color: var(--texto-parrafo-color);
+  letter-spacing: var(--texto-parrafo-espaciado);
+  line-height: var(--texto-parrafo-altura-linea);
+  margin-block: 5px;
+}
+
+small,
+.texto-pequeno {
+  font-family: var(--texto-pequeno-fuente);
+  font-size: var(--texto-pequeno-tamano);
+  font-weight: var(--texto-pequeno-peso);
+  color: var(--texto-pequeno-color);
+  line-height: var(--texto-pequeno-altura-linea);
+  letter-spacing: 0.015em;
+}
+
+label,
+.texto-etiqueta {
+  font-family: var(--texto-parrafo-fuente);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--texto-parrafo-color);
+  letter-spacing: 0.02em;
+}
+
+a,
+.texto-interactivo {
+  font-family: var(--texto-interactivo-fuente);
+  font-size: var(--texto-interactivo-tamano);
+  font-weight: var(--texto-interactivo-peso);
+  color: var(--texto-interactivo-color);
+  text-decoration: var(--texto-interactivo-subrayado);
+  transition: color 0.2s ease, text-decoration-color 0.2s ease;
+}
+
+a:hover,
+.texto-interactivo:hover,
+a:focus,
+.texto-interactivo:focus {
+  color: var(--texto-interactivo-color-hover);
+  text-decoration: underline;
+}
+
+/* Estados especiales de color para textos */
+.texto-destacado {
+  color: var(--texto-destacado-color);
+  background-color: var(--texto-destacado-fondo);
+  border-left: 4px solid var(--texto-destacado-borde);
+  padding: 0.8rem 1.2rem;
+  border-radius: var(--radio-sm);
+}
+
+.texto-advertencia {
+  color: var(--texto-advertencia-color);
+}
+
+.texto-exito {
+  color: var(--texto-exito-color);
+}
+
+.texto-inverso {
+  color: var(--texto-inverso-color);
+}
+
+.texto-centro {
+  text-align: center;
+}
+
+.texto-derecha {
+  text-align: right;
+}
+
+.texto-justificado {
+  text-align: justify;
+}
+
+/* Animación de carga para botones de icono */
+@keyframes spin-icon {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+
+ .icon-btn[aria-busy="true"] svg {
+  animation: spin-icon 1s linear infinite;
+  transform-origin: center;
+}
+
+ .icon-btn[aria-busy="true"] {
+  cursor: wait;
+  opacity: 0.8;
+  pointer-events: none;
+}
