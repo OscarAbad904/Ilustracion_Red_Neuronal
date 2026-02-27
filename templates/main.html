@@ -82,8 +82,8 @@
             <span>Activacion en capas ocultas</span>
             <select id="nnActivation">
               <option value="sigmoid">sigmoid</option>
-              <option value="relu" selected>ReLU</option>
-              <option value="tanh">tanh</option>
+              <option value="relu">ReLU</option>
+              <option value="tanh" selected>tanh</option>
             </select>
           </label>
           <div class="nn-inline">
@@ -96,6 +96,10 @@
               <input id="nnLearningRate" type="number" step="0.001" min="0.001" value="0.02">
             </label>
           </div>
+          <label class="nn-field" for="nnEpochsPerRun">
+            <span>Epocas por entrenamiento</span>
+            <input id="nnEpochsPerRun" type="number" min="1" max="500" step="1" value="10">
+          </label>
           <div class="tool-actions nn-actions">
             <button class="tool-btn tool-btn--ghost" id="btnRunForward" type="button">Forward</button>
             <button class="tool-btn tool-btn--neutral" id="btnTrainStep" type="button">Entrenar</button>
@@ -112,7 +116,7 @@
             </label>
           </div>
           <p id="nnHint" class="nn-hint">
-            El entrenamiento usa 100 ejemplos y evalua 25 casos de prueba para la conversion C -> F.
+            El entrenamiento usa 100 ejemplos, evalua 25 casos de prueba y muestra la evolucion de la perdida.
           </p>
         </div>
       </aside>
@@ -125,6 +129,13 @@
 
         <div id="nodeCanvas" class="node-canvas" aria-label="Diagrama visual de red neuronal">
           <svg id="nnSvg" class="nn-svg" aria-hidden="true"></svg>
+          <div id="trainingChart" class="nn-training-chart" aria-label="Grafica del entrenamiento">
+            <div class="nn-training-chart__header">
+              <span>Evolucion del entrenamiento</span>
+              <span id="nnChartSummary">Train loss 0.000 | Test loss 0.000</span>
+            </div>
+            <svg id="nnChartSvg" class="nn-training-chart__svg" aria-hidden="true"></svg>
+          </div>
           <div class="nn-legend" aria-hidden="true">
             <span class="nn-legend__item nn-legend__item--pos">Peso positivo</span>
             <span class="nn-legend__item nn-legend__item--neg">Peso negativo</span>

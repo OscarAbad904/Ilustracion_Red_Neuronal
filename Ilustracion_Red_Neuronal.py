@@ -11,7 +11,7 @@ app = Flask(__name__, static_folder="assets", static_url_path="/assets")
 def home():
     return render_template(
         "main.html",
-        app_title="UI Nodos",
+        app_title="Simulador de redes neuronales",
     )
 
 
