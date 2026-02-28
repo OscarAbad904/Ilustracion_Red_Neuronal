@@ -1,4 +1,5 @@
 (() => {
+  const tfLib = window.tf;
   const $ = (id) => document.getElementById(id);
 
   const dom = {
@@ -21,10 +22,14 @@
     trainingChart: $("trainingChart"),
     chartSvg: $("nnChartSvg"),
     chartSummary: $("nnChartSummary"),
+    hint: $("nnHint"),
     tooltip: $("nnTooltip"),
   };
 
-  if (!dom.svg || !dom.canvas) {
+  if (!dom.svg || !dom.canvas || !tfLib) {
+    if (dom.connectionHint) {
+      dom.connectionHint.textContent = "TensorFlow.js no esta disponible en el navegador.";
+    }
     return;
   }
 
@@ -51,6 +56,7 @@
     trainingTimer: null,
     isTrainingBatch: false,
     trainingPreview: null,
+    tfBackend: "cpu",
   };
 
   function celsiusToFahrenheit(celsius) {
@@ -117,30 +123,17 @@
     }
   }
 
-  function activationFn(name, value) {
+  function applyActivationTensor(name, tensor) {
     if (name === "sigmoid") {
-      return 1 / (1 + Math.exp(-value));
+      return tfLib.sigmoid(tensor);
     }
     if (name === "tanh") {
-      return Math.tanh(value);
+      return tfLib.tanh(tensor);
     }
     if (name === "relu") {
-      return Math.max(0, value);
+      return tfLib.relu(tensor);
     }
-    return value;
-  }
-
-  function activationDerivative(name, z, activated) {
-    if (name === "sigmoid") {
-      return activated * (1 - activated);
-    }
-    if (name === "tanh") {
-      return 1 - (activated * activated);
-    }
-    if (name === "relu") {
-      return z > 0 ? 1 : 0;
-    }
-    return 1;
+    return tensor.clone();
   }
 
   function randomWeight(prevSize) {
@@ -203,18 +196,54 @@
     return metrics;
   }
 
+  function disposeNetwork() {
+    if (!state.network) {
+      return;
+    }
+
+    state.network.weightVars?.forEach((variable) => variable.dispose());
+    state.network.biasVars?.forEach((variable) => variable.dispose());
+    state.network = null;
+  }
+
+  function syncNetworkArrays() {
+    if (!state.network) {
+      return;
+    }
+
+    state.network.weights = state.network.weightVars.map((variable) => variable.arraySync());
+    state.network.biases = state.network.biasVars.map((variable) => variable.arraySync());
+  }
+
+  async function prepareTensorFlow() {
+    try {
+      await tfLib.setBackend("webgl");
+    } catch (error) {
+      await tfLib.setBackend("cpu");
+    }
+
+    await tfLib.ready();
+    state.tfBackend = tfLib.getBackend();
+
+    if (dom.hint) {
+      dom.hint.textContent = `El entrenamiento usa 100 ejemplos, evalua 25 casos de prueba y muestra la evolucion de la perdida. TensorFlow.js backend: ${state.tfBackend}.`;
+    }
+  }
+
   function resetNetwork() {
     stopTrainingBatch();
+    disposeNetwork();
     state.hiddenSizes = activeHiddenSizes();
-    state.activation = dom.activation?.value || "relu";
+    state.activation = dom.activation?.value || "tanh";
     state.epochs = 0;
     state.hoverNodeKey = null;
     state.hoverEdgeKey = null;
     state.history = [];
 
     const layerSizes = [1, ...state.hiddenSizes, 1];
-    const weights = [];
-    const biases = [];
+    const weightVars = [];
+    const biasVars = [];
+    const networkId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 
     for (let layerIndex = 0; layerIndex < layerSizes.length - 1; layerIndex += 1) {
       const prevSize = layerSizes[layerIndex];
@@ -223,17 +252,27 @@
         Array.from({ length: prevSize }, () => randomWeight(prevSize))
       );
       const layerBiases = Array.from({ length: nextSize }, () => randomWeight(prevSize) * 0.2);
-      weights.push(layerWeights);
-      biases.push(layerBiases);
+      const weightTensor = tfLib.tensor2d(layerWeights, [nextSize, prevSize], "float32");
+      const biasTensor = tfLib.tensor1d(layerBiases, "float32");
+      const weightVar = tfLib.variable(weightTensor, true, `w_${networkId}_${layerIndex}`);
+      const biasVar = tfLib.variable(biasTensor, true, `b_${networkId}_${layerIndex}`);
+      weightTensor.dispose();
+      biasTensor.dispose();
+      weightVars.push(weightVar);
+      biasVars.push(biasVar);
     }
 
     state.network = {
       signature: architectureSignature(state.hiddenSizes),
       layerSizes,
-      weights,
-      biases,
+      weightVars,
+      biasVars,
+      trainableVars: [...weightVars, ...biasVars],
+      weights: [],
+      biases: [],
     };
 
+    syncNetworkArrays();
     state.lastRun = evaluateCurrentInput();
     recordTrainingSnapshot();
   }
@@ -241,7 +280,7 @@
   function ensureNetwork() {
     const nextHiddenSizes = activeHiddenSizes();
     const nextSignature = architectureSignature(nextHiddenSizes);
-    const nextActivation = dom.activation?.value || "relu";
+    const nextActivation = dom.activation?.value || "tanh";
 
     if (!state.network || state.network.signature !== nextSignature) {
       resetNetwork();
@@ -257,41 +296,55 @@
   function forwardNormalized(normalizedInput) {
     ensureNetwork();
 
-    const activations = [[normalizedInput]];
-    const zs = [];
+    return tfLib.tidy(() => {
+      let current = tfLib.tensor2d([[normalizedInput]], [1, 1]);
+      const activations = [Array.from(current.dataSync())];
+      const zs = [];
 
-    for (let layerIndex = 0; layerIndex < state.network.weights.length; layerIndex += 1) {
-      const weightMatrix = state.network.weights[layerIndex];
-      const biasVector = state.network.biases[layerIndex];
-      const previousActivation = activations[layerIndex];
-      const isOutputLayer = layerIndex === state.network.weights.length - 1;
+      for (let layerIndex = 0; layerIndex < state.network.weightVars.length; layerIndex += 1) {
+        const nextSize = state.network.layerSizes[layerIndex + 1];
+        const zTensor = tfLib.matMul(current, state.network.weightVars[layerIndex], false, true)
+          .add(state.network.biasVars[layerIndex].reshape([1, nextSize]));
+        const isOutputLayer = layerIndex === state.network.weightVars.length - 1;
+        const nextTensor = isOutputLayer ? zTensor : applyActivationTensor(state.activation, zTensor);
 
-      const zVector = weightMatrix.map((row, neuronIndex) => {
-        let sum = biasVector[neuronIndex];
-        for (let inputIndex = 0; inputIndex < row.length; inputIndex += 1) {
-          sum += row[inputIndex] * previousActivation[inputIndex];
-        }
-        return sum;
-      });
+        zs.push(Array.from(zTensor.dataSync()));
+        activations.push(Array.from(nextTensor.dataSync()));
+        current = nextTensor;
+      }
 
-      const aVector = zVector.map((z) => (
-        isOutputLayer ? z : activationFn(state.activation, z)
-      ));
+      const normalizedOutput = activations[activations.length - 1][0];
+      return { activations, zs, normalizedOutput };
+    });
+  }
 
-      zs.push(zVector);
-      activations.push(aVector);
+  function predictBatchNormalized(normalizedInputs) {
+    ensureNetwork();
+
+    if (!normalizedInputs.length) {
+      return [];
     }
 
-    return { activations, zs };
+    return tfLib.tidy(() => {
+      let current = tfLib.tensor2d(normalizedInputs.map((value) => [value]), [normalizedInputs.length, 1]);
+
+      for (let layerIndex = 0; layerIndex < state.network.weightVars.length; layerIndex += 1) {
+        const nextSize = state.network.layerSizes[layerIndex + 1];
+        const zTensor = tfLib.matMul(current, state.network.weightVars[layerIndex], false, true)
+          .add(state.network.biasVars[layerIndex].reshape([1, nextSize]));
+        const isOutputLayer = layerIndex === state.network.weightVars.length - 1;
+        current = isOutputLayer ? zTensor : applyActivationTensor(state.activation, zTensor);
+      }
+
+      return Array.from(current.dataSync());
+    });
   }
 
   function evaluateSample(celsius) {
     const forward = forwardNormalized(normalizeInput(celsius));
-    const normalizedOutput = forward.activations[forward.activations.length - 1][0];
     return {
       ...forward,
-      normalizedOutput,
-      output: denormalizeOutput(normalizedOutput),
+      output: denormalizeOutput(forward.normalizedOutput),
     };
   }
 
@@ -310,11 +363,18 @@
   }
 
   function evaluateDataset(dataset) {
-    let totalLoss = 0;
-    for (const sample of dataset) {
-      const result = evaluateSample(sample.celsius);
-      totalLoss += 0.5 * ((result.output - sample.fahrenheit) ** 2);
+    if (!dataset.length) {
+      return 0;
     }
+
+    const normalizedOutputs = predictBatchNormalized(dataset.map((sample) => normalizeInput(sample.celsius)));
+    let totalLoss = 0;
+
+    for (let index = 0; index < dataset.length; index += 1) {
+      const output = denormalizeOutput(normalizedOutputs[index]);
+      totalLoss += 0.5 * ((output - dataset[index].fahrenheit) ** 2);
+    }
+
     return totalLoss / dataset.length;
   }
 
@@ -325,51 +385,46 @@
     }
 
     const learningRate = Math.max(0.0001, parseNumber(dom.learningRate?.value, 0.02));
-    const hiddenActivation = dom.activation?.value || "relu";
-
     const input = normalizeInput(sample.celsius);
     const target = normalizeTarget(sample.fahrenheit);
-    const { activations, zs } = forwardNormalized(input);
-    const deltas = new Array(state.network.weights.length);
-    const lastIndex = state.network.weights.length - 1;
-    const normalizedOutput = activations[activations.length - 1][0];
+    const gradientPack = tfLib.tidy(() => {
+      const result = tfLib.variableGrads(() => {
+        let current = tfLib.tensor2d([[input]], [1, 1]);
 
-    deltas[lastIndex] = [
-      normalizedOutput - target,
-    ];
-
-    for (let layerIndex = lastIndex - 1; layerIndex >= 0; layerIndex -= 1) {
-      const nextWeights = state.network.weights[layerIndex + 1];
-      const nextDelta = deltas[layerIndex + 1];
-      const currentZ = zs[layerIndex];
-      const currentA = activations[layerIndex + 1];
-
-      deltas[layerIndex] = currentZ.map((z, neuronIndex) => {
-        let weightedSum = 0;
-        for (let nextNeuron = 0; nextNeuron < nextWeights.length; nextNeuron += 1) {
-          weightedSum += nextWeights[nextNeuron][neuronIndex] * nextDelta[nextNeuron];
+        for (let layerIndex = 0; layerIndex < state.network.weightVars.length; layerIndex += 1) {
+          const nextSize = state.network.layerSizes[layerIndex + 1];
+          const zTensor = tfLib.matMul(current, state.network.weightVars[layerIndex], false, true)
+            .add(state.network.biasVars[layerIndex].reshape([1, nextSize]));
+          const isOutputLayer = layerIndex === state.network.weightVars.length - 1;
+          current = isOutputLayer ? zTensor : applyActivationTensor(state.activation, zTensor);
         }
-        return weightedSum * activationDerivative(hiddenActivation, z, currentA[neuronIndex]);
+
+        return current.sub(target).square().mul(0.5).asScalar();
+      }, state.network.trainableVars);
+
+      const keptValue = tfLib.keep(result.value);
+      const keptGrads = {};
+      Object.entries(result.grads).forEach(([name, tensor]) => {
+        keptGrads[name] = tfLib.keep(tensor);
       });
-    }
+      return { value: keptValue, grads: keptGrads };
+    });
 
-    for (let layerIndex = 0; layerIndex < state.network.weights.length; layerIndex += 1) {
-      const previousActivation = activations[layerIndex];
-      const layerDelta = deltas[layerIndex];
+    const learningRateTensor = tfLib.scalar(learningRate);
 
-      for (let neuronIndex = 0; neuronIndex < state.network.weights[layerIndex].length; neuronIndex += 1) {
-        for (let inputIndex = 0; inputIndex < state.network.weights[layerIndex][neuronIndex].length; inputIndex += 1) {
-          state.network.weights[layerIndex][neuronIndex][inputIndex] -= (
-            learningRate * layerDelta[neuronIndex] * previousActivation[inputIndex]
-          );
-        }
-        state.network.biases[layerIndex][neuronIndex] -= learningRate * layerDelta[neuronIndex];
-      }
-    }
+    state.network.trainableVars.forEach((variable) => {
+      const gradTensor = gradientPack.grads[variable.name];
+      const updatedTensor = tfLib.tidy(() => variable.sub(gradTensor.mul(learningRateTensor)));
+      variable.assign(updatedTensor);
+      updatedTensor.dispose();
+    });
+
+    learningRateTensor.dispose();
+    Object.values(gradientPack.grads).forEach((tensor) => tensor.dispose());
+    gradientPack.value.dispose();
 
     const postUpdate = forwardNormalized(input);
-    const postNormalizedOutput = postUpdate.activations[postUpdate.activations.length - 1][0];
-    const output = denormalizeOutput(postNormalizedOutput);
+    const output = denormalizeOutput(postUpdate.normalizedOutput);
     const loss = 0.5 * ((output - sample.fahrenheit) ** 2);
 
     return {
@@ -377,7 +432,7 @@
       target: sample.fahrenheit,
       activations: postUpdate.activations,
       zs: postUpdate.zs,
-      normalizedOutput: postNormalizedOutput,
+      normalizedOutput: postUpdate.normalizedOutput,
       output,
       loss,
     };
@@ -608,6 +663,46 @@
     };
   }
 
+  function formatMatrixValue(value) {
+    if (!Number.isFinite(value)) {
+      return String(value);
+    }
+    return value.toFixed(4);
+  }
+
+  function formatRowMatrix(values) {
+    return `[[${values.map((value) => formatMatrixValue(value)).join(", ")}]]`;
+  }
+
+  function buildNodeTooltipHtml(meta, currentRun) {
+    const title = meta.type === "hidden"
+      ? `Neurona ${meta.neuronIndex + 1}`
+      : meta.type === "input"
+        ? "Entrada"
+        : "Salida";
+    const valueLabel = meta.type === "output"
+      ? `Salida estimada: ${currentRun.output.toFixed(2)} F`
+      : `Activacion: ${meta.activation.toFixed(4)}`;
+    const zLabel = meta.type === "input"
+      ? `Entrada real: ${currentRun.celsius.toFixed(2)} C`
+      : `z: ${meta.z.toFixed(4)}`;
+    const matrixBlocks = [];
+    const activationVector = currentRun.activations[meta.layerIndex] || [];
+
+    matrixBlocks.push(
+      `<div class="nn-tooltip__matrix-block"><span class="nn-tooltip__matrix-label">Matriz A${meta.layerIndex}</span><code class="nn-tooltip__matrix">${formatRowMatrix(activationVector)}</code></div>`
+    );
+
+    if (meta.layerIndex > 0) {
+      const zVector = currentRun.zs[meta.layerIndex - 1] || [];
+      matrixBlocks.unshift(
+        `<div class="nn-tooltip__matrix-block"><span class="nn-tooltip__matrix-label">Matriz Z${meta.layerIndex}</span><code class="nn-tooltip__matrix">${formatRowMatrix(zVector)}</code></div>`
+      );
+    }
+
+    return `<strong>${title}</strong><br>${valueLabel}<br>${zLabel}<div class="nn-tooltip__matrix-wrap">${matrixBlocks.join("")}</div>`;
+  }
+
   function setTooltip(html, clientX, clientY) {
     if (!dom.tooltip) {
       return;
@@ -648,6 +743,15 @@
     }
   }
 
+  function scoreFromLoss(loss) {
+    const safeLoss = Math.max(0, loss);
+    return 100 / (1 + (Math.sqrt(safeLoss) / 10));
+  }
+
+  function formatScoreValue(score) {
+    return score.toFixed(score >= 10 ? 1 : 2);
+  }
+
   function renderTrainingChart(metrics) {
     if (!dom.chartSvg || !dom.trainingChart) {
       return;
@@ -655,28 +759,95 @@
 
     const width = Math.max(320, Math.floor(dom.chartSvg.clientWidth || dom.trainingChart.clientWidth || 320));
     const height = Math.max(110, Math.floor(dom.chartSvg.clientHeight || 110));
-    const padding = { top: 10, right: 12, bottom: 24, left: 44 };
+    const padding = { top: 24, right: 12, bottom: 24, left: 44 };
     const plotWidth = Math.max(1, width - padding.left - padding.right);
     const plotHeight = Math.max(1, height - padding.top - padding.bottom);
-    const maxLoss = Math.max(
-      0.001,
-      ...state.history.flatMap((item) => [item.trainLoss, item.testLoss])
-    );
+    const previewEntry = state.trainingPreview
+      ? {
+          epoch: state.trainingPreview.epochIndex,
+          trainLoss: metrics.trainLoss,
+          testLoss: metrics.testLoss,
+          sampleIndex: state.trainingPreview.sampleIndex,
+          sampleCount: state.trainingPreview.sampleCount,
+        }
+      : null;
+    const pointCount = state.history.length + (previewEntry ? 1 : 0);
     const tickCount = 4;
-    const xDenominator = Math.max(1, state.history.length - 1);
+    const xDenominator = Math.max(1, pointCount - 1);
     const xForIndex = (index) => (
-      state.history.length === 1
+      pointCount <= 1
         ? padding.left + (plotWidth / 2)
         : padding.left + ((plotWidth * index) / xDenominator)
     );
-    const yForLoss = (loss) => (
-      padding.top + plotHeight - ((loss / maxLoss) * plotHeight)
-    );
     const latestEntry = state.history[state.history.length - 1];
     const firstEntry = state.history[0];
+    const scoredHistory = state.history.map((item) => ({
+      ...item,
+      trainScore: scoreFromLoss(item.trainLoss),
+      testScore: scoreFromLoss(item.testLoss),
+    }));
+    const previewScored = previewEntry
+      ? {
+          ...previewEntry,
+          trainScore: scoreFromLoss(previewEntry.trainLoss),
+          testScore: scoreFromLoss(previewEntry.testLoss),
+        }
+      : null;
+    const scoredPoints = previewScored ? [...scoredHistory, previewScored] : scoredHistory;
+    const scoreValues = scoredPoints.flatMap((item) => [item.trainScore, item.testScore]);
+    const rawMinScore = Math.min(...scoreValues);
+    const rawMaxScore = Math.max(...scoreValues);
+    const scoreSpan = Math.max(0.8, rawMaxScore - rawMinScore);
+    const chartMinScore = Math.max(0, rawMinScore - Math.max(0.8, scoreSpan * 0.2));
+    const chartMaxScore = Math.min(100, rawMaxScore + Math.max(0.8, scoreSpan * 0.2));
+    const visibleScoreSpan = Math.max(1, chartMaxScore - chartMinScore);
+    const yForScore = (score) => (
+      padding.top + plotHeight - (((score - chartMinScore) / visibleScoreSpan) * plotHeight)
+    );
 
     dom.chartSvg.innerHTML = "";
     dom.chartSvg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+    const note = createSvg("text", {
+      x: padding.left,
+      y: 12,
+      class: "nn-chart-note",
+    });
+    note.textContent = "Score (inverso del loss) | arriba = mejor";
+    dom.chartSvg.appendChild(note);
+
+    const legendStartX = Math.max(padding.left + 170, width - padding.right - 152);
+    const legendY = 11;
+    const trainLegendLine = createSvg("line", {
+      x1: legendStartX,
+      y1: legendY,
+      x2: legendStartX + 16,
+      y2: legendY,
+      class: "nn-chart-line nn-chart-line--train nn-chart-line--legend",
+    });
+    const trainLegendLabel = createSvg("text", {
+      x: legendStartX + 20,
+      y: legendY + 3,
+      class: "nn-chart-legend-label",
+    });
+    trainLegendLabel.textContent = "Train (verde)";
+    dom.chartSvg.append(trainLegendLine, trainLegendLabel);
+
+    const testLegendX = legendStartX + 82;
+    const testLegendLine = createSvg("line", {
+      x1: testLegendX,
+      y1: legendY,
+      x2: testLegendX + 16,
+      y2: legendY,
+      class: "nn-chart-line nn-chart-line--test nn-chart-line--legend",
+    });
+    const testLegendLabel = createSvg("text", {
+      x: testLegendX + 20,
+      y: legendY + 3,
+      class: "nn-chart-legend-label",
+    });
+    testLegendLabel.textContent = "Test (azul)";
+    dom.chartSvg.append(testLegendLine, testLegendLabel);
 
     dom.chartSvg.appendChild(createSvg("rect", {
       x: padding.left,
@@ -688,7 +859,7 @@
 
     for (let tick = 0; tick <= tickCount; tick += 1) {
       const y = padding.top + ((plotHeight * tick) / tickCount);
-      const lossValue = maxLoss * (1 - (tick / tickCount));
+      const scoreValue = chartMaxScore - ((visibleScoreSpan * tick) / tickCount);
 
       dom.chartSvg.appendChild(createSvg("line", {
         x1: padding.left,
@@ -704,14 +875,14 @@
         "text-anchor": "end",
         class: "nn-chart-axis-label",
       });
-      label.textContent = lossValue.toFixed(lossValue >= 10 ? 1 : 2);
+      label.textContent = formatScoreValue(scoreValue);
       dom.chartSvg.appendChild(label);
     }
 
     const xTicks = Array.from(new Set([
       0,
-      Math.max(0, Math.floor((state.history.length - 1) / 2)),
-      Math.max(0, state.history.length - 1),
+      Math.max(0, Math.floor((pointCount - 1) / 2)),
+      Math.max(0, pointCount - 1),
     ]));
 
     xTicks.forEach((tickIndex) => {
@@ -731,17 +902,21 @@
         "text-anchor": "middle",
         class: "nn-chart-axis-label",
       });
-      label.textContent = String(state.history[tickIndex]?.epoch ?? tickIndex);
+      const pointEntry = scoredPoints[tickIndex];
+      const isPreviewTick = previewScored && tickIndex === (pointCount - 1);
+      label.textContent = isPreviewTick
+        ? `${pointEntry?.epoch ?? tickIndex}*`
+        : String(pointEntry?.epoch ?? tickIndex);
       dom.chartSvg.appendChild(label);
     });
 
     const trainPoints = [];
     const testPoints = [];
 
-    state.history.forEach((item, index) => {
+    scoredHistory.forEach((item, index) => {
       const x = xForIndex(index);
-      const trainY = yForLoss(item.trainLoss);
-      const testY = yForLoss(item.testLoss);
+      const trainY = yForScore(item.trainScore);
+      const testY = yForScore(item.testScore);
       trainPoints.push(`${x},${trainY}`);
       testPoints.push(`${x},${testY}`);
 
@@ -770,11 +945,11 @@
       class: "nn-chart-line nn-chart-line--test",
     }));
 
-    if (state.history.length === 1) {
-      const firstPoint = state.history[0];
+    if (scoredHistory.length === 1) {
+      const firstPoint = scoredHistory[0];
       const x = xForIndex(0);
-      const trainY = yForLoss(firstPoint.trainLoss);
-      const testY = yForLoss(firstPoint.testLoss);
+      const trainY = yForScore(firstPoint.trainScore);
+      const testY = yForScore(firstPoint.testScore);
 
       dom.chartSvg.appendChild(createSvg("circle", {
         cx: x,
@@ -791,10 +966,55 @@
       }));
     }
 
-    if (latestEntry) {
+    if (previewScored) {
+      const previewIndex = pointCount - 1;
+      const previewX = xForIndex(previewIndex);
+      const previewTrainY = yForScore(previewScored.trainScore);
+      const previewTestY = yForScore(previewScored.testScore);
+
+      dom.chartSvg.appendChild(createSvg("line", {
+        x1: previewX,
+        y1: padding.top,
+        x2: previewX,
+        y2: padding.top + plotHeight,
+        class: "nn-chart-preview-line",
+      }));
+
+      if (scoredHistory.length) {
+        const lastHistoryIndex = scoredHistory.length - 1;
+        const lastHistory = scoredHistory[lastHistoryIndex];
+        const lastX = xForIndex(lastHistoryIndex);
+        const lastTrainY = yForScore(lastHistory.trainScore);
+        const lastTestY = yForScore(lastHistory.testScore);
+
+        dom.chartSvg.appendChild(createSvg("polyline", {
+          points: `${lastX},${lastTrainY} ${previewX},${previewTrainY}`,
+          class: "nn-chart-line nn-chart-line--train nn-chart-line--preview",
+        }));
+
+        dom.chartSvg.appendChild(createSvg("polyline", {
+          points: `${lastX},${lastTestY} ${previewX},${previewTestY}`,
+          class: "nn-chart-line nn-chart-line--test nn-chart-line--preview",
+        }));
+      }
+
+      dom.chartSvg.appendChild(createSvg("circle", {
+        cx: previewX,
+        cy: previewTrainY,
+        r: 3.2,
+        class: "nn-chart-point nn-chart-point--train nn-chart-point--current",
+      }));
+
+      dom.chartSvg.appendChild(createSvg("circle", {
+        cx: previewX,
+        cy: previewTestY,
+        r: 3.2,
+        class: "nn-chart-point nn-chart-point--test nn-chart-point--current",
+      }));
+    } else if (latestEntry) {
       const latestX = xForIndex(state.history.length - 1);
-      const latestTrainY = yForLoss(latestEntry.trainLoss);
-      const latestTestY = yForLoss(latestEntry.testLoss);
+      const latestTrainY = yForScore(scoreFromLoss(latestEntry.trainLoss));
+      const latestTestY = yForScore(scoreFromLoss(latestEntry.testLoss));
 
       dom.chartSvg.appendChild(createSvg("line", {
         x1: latestX,
@@ -820,15 +1040,21 @@
     }
 
     if (dom.chartSummary) {
-      const initialTrain = firstEntry?.trainLoss ?? metrics.trainLoss;
-      const currentEpoch = latestEntry?.epoch ?? metrics.epoch;
-      dom.chartSummary.textContent = `Epoch ${currentEpoch} | Train ${initialTrain.toFixed(3)} -> ${metrics.trainLoss.toFixed(3)} | Test ${metrics.testLoss.toFixed(3)}`;
+      const initialTrainScore = scoreFromLoss(firstEntry?.trainLoss ?? metrics.trainLoss);
+      const currentEpoch = previewScored?.epoch ?? latestEntry?.epoch ?? metrics.epoch;
+      const currentTrainScore = scoreFromLoss(metrics.trainLoss);
+      const currentTestScore = scoreFromLoss(metrics.testLoss);
+      const previewText = previewScored
+        ? ` | Progreso ${previewScored.sampleIndex}/${previewScored.sampleCount}*`
+        : "";
+      dom.chartSummary.textContent = `Epoch ${currentEpoch} | Score train ${formatScoreValue(initialTrainScore)} -> ${formatScoreValue(currentTrainScore)} | Score test ${formatScoreValue(currentTestScore)}${previewText}`;
     }
   }
 
   function render(options = {}) {
     const { skipHistory = false } = options;
     ensureNetwork();
+    syncNetworkArrays();
     updateTargetField();
     updateLayerControls();
     if (!state.trainingPreview?.run) {
@@ -1065,13 +1291,7 @@
         state.hoverNodeKey = meta.key;
         state.hoverEdgeKey = null;
         syncHighlightState();
-        const valueLabel = meta.type === "output"
-          ? `Salida estimada: ${displayRun.output.toFixed(2)} F`
-          : `Activacion: ${meta.activation.toFixed(4)}`;
-        const zLabel = meta.type === "input"
-          ? `Entrada real: ${displayRun.celsius.toFixed(2)} C`
-          : `z: ${meta.z.toFixed(4)}`;
-        setTooltip(`<strong>${meta.type === "hidden" ? `Neurona ${meta.neuronIndex + 1}` : meta.type === "input" ? "Entrada" : "Salida"}</strong><br>${valueLabel}<br>${zLabel}`, event.clientX, event.clientY);
+        setTooltip(buildNodeTooltipHtml(meta, displayRun), event.clientX, event.clientY);
       });
 
       meta.group.addEventListener("mousemove", (event) => {
@@ -1183,9 +1403,19 @@
     window.addEventListener("resize", render);
   }
 
-  updateTargetField();
-  updateLayerControls();
-  resetNetwork();
-  bindEvents();
-  render();
+  async function initializeApp() {
+    await prepareTensorFlow();
+    updateTargetField();
+    updateLayerControls();
+    resetNetwork();
+    bindEvents();
+    render();
+  }
+
+  initializeApp().catch((error) => {
+    if (dom.connectionHint) {
+      dom.connectionHint.textContent = "No se ha podido inicializar TensorFlow.js.";
+    }
+    console.error(error);
+  });
 })();

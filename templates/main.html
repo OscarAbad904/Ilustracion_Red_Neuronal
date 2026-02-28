@@ -131,8 +131,8 @@
           <svg id="nnSvg" class="nn-svg" aria-hidden="true"></svg>
           <div id="trainingChart" class="nn-training-chart" aria-label="Grafica del entrenamiento">
             <div class="nn-training-chart__header">
-              <span>Evolucion del entrenamiento</span>
-              <span id="nnChartSummary">Train loss 0.000 | Test loss 0.000</span>
+              <span>Evolucion del entrenamiento (score)</span>
+              <span id="nnChartSummary">Train (verde) | Test (azul) | arriba = mejor</span>
             </div>
             <svg id="nnChartSvg" class="nn-training-chart__svg" aria-hidden="true"></svg>
           </div>
@@ -146,6 +146,7 @@
       </section>
     </section>
   </main>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
   <script src="{{ url_for('static', filename='js/node_canvas.js') }}"></script>
 </body>
 </html>
