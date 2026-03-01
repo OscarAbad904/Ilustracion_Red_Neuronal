@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from flask import Flask, Response, jsonify, render_template, send_from_directory
+from config import PORT
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -11,7 +12,7 @@ app = Flask(__name__, static_folder="assets", static_url_path="/assets")
 def home():
     return render_template(
         "main.html",
-        app_title="Simulador de redes neuronales",
+        app_title="Entendiendo una red neuronal",
     )
 
 
@@ -30,4 +31,4 @@ def favicon():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5050, debug=True)
+    app.run(host="0.0.0.0", port=PORT, debug=True)

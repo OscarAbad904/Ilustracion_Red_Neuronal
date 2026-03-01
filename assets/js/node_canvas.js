@@ -6,8 +6,10 @@
     celsiusInput: $("nnCelsiusInput"),
     targetF: $("nnTargetF"),
     layerCount: $("nnLayerCount"),
+    layerRows: [$("nnLayerRow1"), $("nnLayerRow2"), $("nnLayerRow3"), $("nnLayerRow4")],
     layerSizes: [$("nnLayerSize1"), $("nnLayerSize2"), $("nnLayerSize3"), $("nnLayerSize4")],
-    activation: $("nnActivation"),
+    layerActivations: [$("nnLayerActivation1"), $("nnLayerActivation2"), $("nnLayerActivation3"), $("nnLayerActivation4")],
+    outputActivation: $("nnOutputActivation"),
     learningRate: $("nnLearningRate"),
     epochsPerRun: $("nnEpochsPerRun"),
     animateSignal: $("nnAnimateSignal"),
@@ -58,8 +60,9 @@
 
   const state = {
     network: null,
-    hiddenSizes: [],
-    activation: "tanh",
+    hiddenLayers: [],
+    outputActivation: "linear",
+    previewActivation: "tanh",
     epochs: 0,
     lastRun: null,
     hoverNodeKey: null,

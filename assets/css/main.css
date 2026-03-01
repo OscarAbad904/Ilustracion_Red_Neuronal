@@ -6,7 +6,7 @@
 
 .node-workbench {
   display: grid;
-  grid-template-columns: minmax(250px, 300px) minmax(680px, 1fr);
+  grid-template-columns: minmax(300px, 350px) minmax(680px, 1fr);
   gap: 10px;
   min-height: calc(100vh - 104px);
   height: calc(100vh - 104px);
@@ -148,33 +148,60 @@
 
 .nn-layer-config {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px 8px;
+  gap: 4px;
 }
 
-.nn-layer-config .nn-field {
-  grid-template-columns: auto minmax(0, 1fr);
+.nn-layer-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 0.8fr) minmax(0, 1fr);
   align-items: center;
   column-gap: 6px;
 }
 
-.nn-layer-config .nn-field span {
-  white-space: nowrap;
+.nn-layer-row.is-disabled {
+  opacity: 0.48;
 }
 
-.nn-layer-config .nn-field select {
+.nn-layer-row__label {
+  white-space: nowrap;
+  font-size: 0.7rem;
+  color: rgba(23, 47, 94, 0.86);
+}
+
+.nn-layer-row select,
+.nn-layer-row__value {
   min-width: 0;
+}
+
+.nn-layer-row__value {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 28px;
+  height: 28px;
+  padding: 4px 7px;
+  border: 1px solid rgba(100, 129, 186, 0.32);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #24487b;
+  background: rgba(238, 244, 255, 0.92);
+}
+
+.nn-layer-row--output {
+  margin-top: 2px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(90, 122, 185, 0.14);
 }
 
 .nn-training-config {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px 8px;
   align-items: start;
-}
-
-.nn-training-config__activation {
-  grid-row: auto;
 }
 
 .nn-actions {
@@ -1042,10 +1069,6 @@
   .nn-training-config,
   .nn-actions {
     grid-template-columns: 1fr;
-  }
-
-  .nn-training-config__activation {
-    grid-row: auto;
   }
 }
 

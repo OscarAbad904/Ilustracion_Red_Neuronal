@@ -42,57 +42,79 @@
               <option value="4">4</option>
             </select>
           </label>
-          <div class="nn-layer-config">
-            <label class="nn-field" for="nnLayerSize1">
-              <span>Capa 1</span>
-              <select id="nnLayerSize1">
+          <div class="nn-layer-config" aria-label="Configuracion de capas y salida">
+            <div class="nn-layer-row" id="nnLayerRow1">
+              <span class="nn-layer-row__label">Capa 1</span>
+              <select id="nnLayerSize1" aria-label="Neuronas de la capa 1">
                 <option value="1">1</option>
                 <option value="2">2</option>
                 <option value="3" selected>3</option>
                 <option value="4">4</option>
                 <option value="5">5</option>
               </select>
-            </label>
-            <label class="nn-field" for="nnLayerSize2">
-              <span>Capa 2</span>
-              <select id="nnLayerSize2">
-                <option value="1">1</option>
-                <option value="2" selected>2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-              </select>
-            </label>
-            <label class="nn-field" for="nnLayerSize3">
-              <span>Capa 3</span>
-              <select id="nnLayerSize3">
-                <option value="1">1</option>
-                <option value="2" selected>2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-              </select>
-            </label>
-            <label class="nn-field" for="nnLayerSize4">
-              <span>Capa 4</span>
-              <select id="nnLayerSize4">
-                <option value="1">1</option>
-                <option value="2" selected>2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-              </select>
-            </label>
-          </div>
-          <div class="nn-training-config">
-            <label class="nn-field nn-training-config__activation" for="nnActivation">
-              <span>Activacion<br>capas</span>
-              <select id="nnActivation">
+              <select id="nnLayerActivation1" aria-label="Activacion de la capa 1">
                 <option value="sigmoid">sigmoid</option>
                 <option value="relu">ReLU</option>
                 <option value="tanh" selected>tanh</option>
               </select>
-            </label>
+            </div>
+            <div class="nn-layer-row" id="nnLayerRow2">
+              <span class="nn-layer-row__label">Capa 2</span>
+              <select id="nnLayerSize2" aria-label="Neuronas de la capa 2">
+                <option value="1">1</option>
+                <option value="2" selected>2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+              <select id="nnLayerActivation2" aria-label="Activacion de la capa 2">
+                <option value="sigmoid">sigmoid</option>
+                <option value="relu">ReLU</option>
+                <option value="tanh" selected>tanh</option>
+              </select>
+            </div>
+            <div class="nn-layer-row" id="nnLayerRow3">
+              <span class="nn-layer-row__label">Capa 3</span>
+              <select id="nnLayerSize3" aria-label="Neuronas de la capa 3">
+                <option value="1">1</option>
+                <option value="2" selected>2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+              <select id="nnLayerActivation3" aria-label="Activacion de la capa 3">
+                <option value="sigmoid">sigmoid</option>
+                <option value="relu">ReLU</option>
+                <option value="tanh" selected>tanh</option>
+              </select>
+            </div>
+            <div class="nn-layer-row" id="nnLayerRow4">
+              <span class="nn-layer-row__label">Capa 4</span>
+              <select id="nnLayerSize4" aria-label="Neuronas de la capa 4">
+                <option value="1">1</option>
+                <option value="2" selected>2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+              <select id="nnLayerActivation4" aria-label="Activacion de la capa 4">
+                <option value="sigmoid">sigmoid</option>
+                <option value="relu">ReLU</option>
+                <option value="tanh" selected>tanh</option>
+              </select>
+            </div>
+            <div class="nn-layer-row nn-layer-row--output" id="nnOutputRow">
+              <span class="nn-layer-row__label">Salida</span>
+              <div class="nn-layer-row__value" aria-hidden="true">1</div>
+              <select id="nnOutputActivation" aria-label="Activacion de salida">
+                <option value="linear" selected>lineal</option>
+                <option value="sigmoid">sigmoid</option>
+                <option value="relu">ReLU</option>
+                <option value="tanh">tanh</option>
+              </select>
+            </div>
+          </div>
+          <div class="nn-training-config">
             <label class="nn-field" for="nnLearningRate">
               <span>Learning<br>rate</span>
               <input id="nnLearningRate" type="number" step="0.001" min="0.001" value="0.02">
@@ -169,7 +191,7 @@
           </section>
           <section id="nnActivationCard" class="nn-activation-card" aria-label="Activacion seleccionada">
             <div class="nn-activation-card__header">
-              <span class="nn-activation-card__label">Activacion actual</span>
+              <span class="nn-activation-card__label">Activacion en foco</span>
               <span id="nnActivationBadge" class="nn-activation-card__badge">tanh</span>
             </div>
             <div
@@ -182,7 +204,7 @@
               <svg id="nnActivationPreview" class="nn-activation-card__svg" aria-hidden="true"></svg>
             </div>
             <p id="nnActivationHint" class="nn-activation-card__hint">
-              Pasa el cursor por la curva para ver como responde esta activacion.
+              Pasa el cursor por la curva para ver como responde la activacion seleccionada.
             </p>
           </section>
           <div class="nn-legend" aria-hidden="true">
