@@ -1,5 +1,6 @@
 {
-    "python.defaultInterpreterPath": "${workspaceFolder}\\.env\\Scripts\\python.exe",
+    "python.defaultInterpreterPath": "C:\\Users\\Oscar\\miniconda3\\envs\\EMESA\\python.exe",
+    "python.useEnvironmentsExtension": false,
     "python-envs.pythonProjects": [
         {
             "path": ".",

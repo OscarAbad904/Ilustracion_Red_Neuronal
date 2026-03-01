@@ -12,6 +12,8 @@
     epochsPerRun: $("nnEpochsPerRun"),
     animateSignal: $("nnAnimateSignal"),
     showWeightLabels: $("nnShowWeightLabels"),
+    showTrainingChart: $("nnShowTrainingChart"),
+    showLessonPanel: $("nnShowLessonPanel"),
     btnForward: $("btnRunForward"),
     btnTrain: $("btnTrainStep"),
     btnReset: $("btnResetWeights"),
@@ -24,6 +26,17 @@
     chartSummary: $("nnChartSummary"),
     hint: $("nnHint"),
     tooltip: $("nnTooltip"),
+    lessonPanel: $("nnLessonPanel"),
+    lessonTitle: $("nnLessonTitle"),
+    lessonTag: $("nnLessonTag"),
+    lessonBody: $("nnLessonBody"),
+    lessonFormula: $("nnLessonFormula"),
+    lessonBullets: $("nnLessonBullets"),
+    activationCard: $("nnActivationCard"),
+    activationBadge: $("nnActivationBadge"),
+    activationPreviewWrap: $("nnActivationPreviewWrap"),
+    activationPreview: $("nnActivationPreview"),
+    activationHint: $("nnActivationHint"),
   };
 
   if (!dom.svg || !dom.canvas || !tfLib) {
@@ -57,7 +70,171 @@
     isTrainingBatch: false,
     trainingPreview: null,
     tfBackend: "cpu",
+    currentMetrics: null,
+    currentDisplayRun: null,
+    activationPreviewHovered: false,
   };
+
+  function isTrainingChartVisible() {
+    return dom.showTrainingChart ? !!dom.showTrainingChart.checked : true;
+  }
+
+  function isLessonPanelVisible() {
+    return dom.showLessonPanel ? !!dom.showLessonPanel.checked : true;
+  }
+
+  function clampValue(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+  }
+
+  function positionFloatingCard(element, left, top) {
+    if (!element || !dom.canvas || element.classList.contains("is-hidden")) {
+      return;
+    }
+
+    const margin = 10;
+    const canvasWidth = Math.max(dom.canvas.clientWidth || 0, 1);
+    const canvasHeight = Math.max(dom.canvas.clientHeight || 0, 1);
+    const cardWidth = Math.max(element.offsetWidth || 0, 1);
+    const cardHeight = Math.max(element.offsetHeight || 0, 1);
+    const maxLeft = Math.max(margin, canvasWidth - cardWidth - margin);
+    const maxTop = Math.max(margin, canvasHeight - cardHeight - margin);
+    const nextLeft = clampValue(left, margin, maxLeft);
+    const nextTop = clampValue(top, margin, maxTop);
+
+    element.style.left = `${nextLeft}px`;
+    element.style.top = `${nextTop}px`;
+    element.style.right = "auto";
+    element.style.bottom = "auto";
+  }
+
+  function lockFloatingCardPosition(element) {
+    if (!element || !dom.canvas || element.classList.contains("is-hidden")) {
+      return;
+    }
+
+    const canvasRect = dom.canvas.getBoundingClientRect();
+    const cardRect = element.getBoundingClientRect();
+    positionFloatingCard(
+      element,
+      cardRect.left - canvasRect.left,
+      cardRect.top - canvasRect.top,
+    );
+  }
+
+  function syncInfoCardVisibility() {
+    const visibilityRules = [
+      { element: dom.trainingChart, visible: isTrainingChartVisible() },
+      { element: dom.lessonPanel, visible: isLessonPanelVisible() },
+    ];
+
+    visibilityRules.forEach(({ element, visible }) => {
+      if (!element) {
+        return;
+      }
+
+      element.classList.toggle("is-hidden", !visible);
+
+      if (visible) {
+        lockFloatingCardPosition(element);
+      }
+    });
+  }
+
+  function clampFloatingCardsToCanvas() {
+    [dom.trainingChart, dom.lessonPanel].forEach((element) => {
+      if (!element || element.classList.contains("is-hidden")) {
+        return;
+      }
+
+      const left = Number.parseFloat(element.style.left);
+      const top = Number.parseFloat(element.style.top);
+
+      if (Number.isFinite(left) && Number.isFinite(top)) {
+        positionFloatingCard(element, left, top);
+      } else {
+        lockFloatingCardPosition(element);
+      }
+    });
+  }
+
+  function initializeDraggableCard(element, handle) {
+    if (!element || !handle || !dom.canvas || element.dataset.dragReady === "true") {
+      return;
+    }
+
+    element.dataset.dragReady = "true";
+    let dragState = null;
+
+    const endDrag = (event) => {
+      if (!dragState) {
+        return;
+      }
+
+      if (event && event.pointerId !== undefined && event.pointerId !== dragState.pointerId) {
+        return;
+      }
+
+      element.classList.remove("is-dragging");
+      dragState = null;
+    };
+
+    handle.addEventListener("pointerdown", (event) => {
+      const isPrimaryButton = event.button === undefined || event.button === 0;
+      if (!isPrimaryButton || element.classList.contains("is-hidden")) {
+        return;
+      }
+
+      lockFloatingCardPosition(element);
+      const canvasRect = dom.canvas.getBoundingClientRect();
+      const cardRect = element.getBoundingClientRect();
+      dragState = {
+        pointerId: event.pointerId,
+        offsetX: event.clientX - cardRect.left,
+        offsetY: event.clientY - cardRect.top,
+      };
+
+      handle.setPointerCapture?.(event.pointerId);
+      positionFloatingCard(
+        element,
+        cardRect.left - canvasRect.left,
+        cardRect.top - canvasRect.top,
+      );
+      element.classList.add("is-dragging");
+      event.preventDefault();
+    });
+
+    handle.addEventListener("pointermove", (event) => {
+      if (!dragState || event.pointerId !== dragState.pointerId) {
+        return;
+      }
+
+      const canvasRect = dom.canvas.getBoundingClientRect();
+      positionFloatingCard(
+        element,
+        event.clientX - canvasRect.left - dragState.offsetX,
+        event.clientY - canvasRect.top - dragState.offsetY,
+      );
+      event.preventDefault();
+    });
+
+    handle.addEventListener("pointerup", endDrag);
+    handle.addEventListener("pointercancel", endDrag);
+    handle.addEventListener("lostpointercapture", endDrag);
+  }
+
+  function initializeFloatingCards() {
+    initializeDraggableCard(
+      dom.trainingChart,
+      dom.trainingChart?.querySelector(".nn-training-chart__header"),
+    );
+    initializeDraggableCard(
+      dom.lessonPanel,
+      dom.lessonPanel?.querySelector(".nn-lesson-panel__header"),
+    );
+    syncInfoCardVisibility();
+    clampFloatingCardsToCanvas();
+  }
 
   function celsiusToFahrenheit(celsius) {
     return (celsius * 9 / 5) + 32;
@@ -153,7 +330,12 @@
       return;
     }
     const celsius = parseNumber(dom.celsiusInput?.value, 25);
-    dom.targetF.value = celsiusToFahrenheit(celsius).toFixed(1).replace(/\.0$/, "");
+    const targetValue = celsiusToFahrenheit(celsius).toFixed(1).replace(/\.0$/, "");
+    if ("value" in dom.targetF) {
+      dom.targetF.value = targetValue;
+      return;
+    }
+    dom.targetF.textContent = targetValue;
   }
 
   function updateLayerControls() {
@@ -674,6 +856,268 @@
     return `[[${values.map((value) => formatMatrixValue(value)).join(", ")}]]`;
   }
 
+  function formatDidacticNumber(value, digits = 2) {
+    if (!Number.isFinite(value)) {
+      return String(value);
+    }
+
+    return value
+      .toFixed(digits)
+      .replace(/\.0+$/, "")
+      .replace(/(\.\d*?)0+$/, "$1");
+  }
+
+  function activationLabel(name) {
+    if (name === "relu") {
+      return "ReLU";
+    }
+    if (name === "tanh") {
+      return "tanh";
+    }
+    if (name === "sigmoid") {
+      return "sigmoid";
+    }
+    return name || "lineal";
+  }
+
+  function activationCurveValue(name, x) {
+    if (name === "relu") {
+      return Math.max(0, x);
+    }
+    if (name === "tanh") {
+      return Math.tanh(x);
+    }
+    if (name === "sigmoid") {
+      return 1 / (1 + Math.exp(-x));
+    }
+    return x;
+  }
+
+  function activationProfile(name) {
+    if (name === "relu") {
+      return {
+        key: "relu",
+        label: "ReLU",
+        color: "#d57220",
+        softColor: "rgba(213, 114, 32, 0.12)",
+        borderColor: "rgba(213, 114, 32, 0.24)",
+        textColor: "#9c4d09",
+        glowColor: "rgba(213, 114, 32, 0.12)",
+        xMin: -3,
+        xMax: 3,
+        yMin: -0.4,
+        yMax: 3.2,
+        idleText: "ReLU deja en cero lo negativo y hace crecer linealmente lo positivo.",
+        hoverText: "ReLU: f(z)=max(0, z). Rango [0, +inf). Suele entrenar rapido y evita saturacion en valores positivos, pero puede apagar neuronas si z queda siempre negativo.",
+      };
+    }
+    if (name === "sigmoid") {
+      return {
+        key: "sigmoid",
+        label: "sigmoid",
+        color: "#2f77d8",
+        softColor: "rgba(47, 119, 216, 0.12)",
+        borderColor: "rgba(47, 119, 216, 0.24)",
+        textColor: "#2457a5",
+        glowColor: "rgba(47, 119, 216, 0.12)",
+        xMin: -6,
+        xMax: 6,
+        yMin: -0.1,
+        yMax: 1.1,
+        idleText: "Sigmoid comprime cualquier z al intervalo entre 0 y 1.",
+        hoverText: "Sigmoid: f(z)=1/(1+e^-z). Rango (0, 1). Es util como probabilidad, pero en los extremos se aplana y el gradiente se vuelve pequeno.",
+      };
+    }
+    return {
+      key: "tanh",
+      label: "tanh",
+      color: "#c2415d",
+      softColor: "rgba(194, 65, 93, 0.12)",
+      borderColor: "rgba(194, 65, 93, 0.24)",
+      textColor: "#933149",
+      glowColor: "rgba(194, 65, 93, 0.12)",
+      xMin: -4,
+      xMax: 4,
+      yMin: -1.15,
+      yMax: 1.15,
+      idleText: "tanh comprime la senal entre -1 y 1 y se mantiene centrada en cero.",
+      hoverText: "tanh: f(z)=tanh(z). Rango (-1, 1). Mantiene senales positivas y negativas, lo que suele ayudar en capas ocultas, aunque tambien se satura en los extremos.",
+    };
+  }
+
+  function mapActivationPoint(value, domainMin, domainMax, rangeMin, rangeMax) {
+    if (domainMax === domainMin) {
+      return rangeMin;
+    }
+    const ratio = (value - domainMin) / (domainMax - domainMin);
+    return rangeMin + ((rangeMax - rangeMin) * ratio);
+  }
+
+  function renderActivationPreview() {
+    if (!dom.activationCard || !dom.activationBadge || !dom.activationPreview || !dom.activationHint) {
+      return;
+    }
+
+    const profile = activationProfile(dom.activation?.value || state.activation || "tanh");
+    const width = 220;
+    const height = 86;
+    const paddingX = 16;
+    const paddingY = 9;
+    const xStart = paddingX;
+    const xEnd = width - paddingX;
+    const yBottom = height - paddingY;
+    const yTop = paddingY;
+    const xZero = mapActivationPoint(profile.xMin <= 0 && profile.xMax >= 0 ? 0 : profile.xMin, profile.xMin, profile.xMax, xStart, xEnd);
+    const yZero = mapActivationPoint(profile.yMin <= 0 && profile.yMax >= 0 ? 0 : profile.yMin, profile.yMin, profile.yMax, yBottom, yTop);
+    const sampleCount = 56;
+    const curvePoints = [];
+
+    for (let index = 0; index <= sampleCount; index += 1) {
+      const xValue = profile.xMin + ((profile.xMax - profile.xMin) * index) / sampleCount;
+      const yValue = activationCurveValue(profile.key, xValue);
+      const x = mapActivationPoint(xValue, profile.xMin, profile.xMax, xStart, xEnd);
+      const y = mapActivationPoint(yValue, profile.yMin, profile.yMax, yBottom, yTop);
+      curvePoints.push(`${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`);
+    }
+
+    const centerPointY = mapActivationPoint(activationCurveValue(profile.key, 0), profile.yMin, profile.yMax, yBottom, yTop);
+    const horizontalGuides = [
+      mapActivationPoint(profile.yMin + ((profile.yMax - profile.yMin) * 0.25), profile.yMin, profile.yMax, yBottom, yTop),
+      mapActivationPoint(profile.yMin + ((profile.yMax - profile.yMin) * 0.75), profile.yMin, profile.yMax, yBottom, yTop),
+    ];
+    const verticalGuides = [
+      mapActivationPoint(profile.xMin + ((profile.xMax - profile.xMin) * 0.25), profile.xMin, profile.xMax, xStart, xEnd),
+      mapActivationPoint(profile.xMin + ((profile.xMax - profile.xMin) * 0.75), profile.xMin, profile.xMax, xStart, xEnd),
+    ];
+
+    dom.activationCard.style.setProperty("--activation-accent", profile.color);
+    dom.activationCard.style.setProperty("--activation-soft", profile.softColor);
+    dom.activationCard.style.setProperty("--activation-border", profile.borderColor);
+    dom.activationCard.style.setProperty("--activation-text", profile.textColor);
+    dom.activationCard.style.setProperty("--activation-glow", profile.glowColor);
+    dom.activationPreview.style.setProperty("--curve-color", profile.color);
+    dom.activationBadge.textContent = profile.label;
+    dom.activationPreviewWrap?.setAttribute("aria-label", `${profile.label}. ${profile.hoverText}`);
+    dom.activationHint.textContent = state.activationPreviewHovered ? profile.hoverText : profile.idleText;
+    dom.activationPreview.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    dom.activationPreview.innerHTML = [
+      ...horizontalGuides.map((y) => `<line class="nn-activation-axis nn-activation-axis--minor" x1="${xStart}" y1="${y.toFixed(2)}" x2="${xEnd}" y2="${y.toFixed(2)}"></line>`),
+      ...verticalGuides.map((x) => `<line class="nn-activation-axis nn-activation-axis--minor" x1="${x.toFixed(2)}" y1="${yTop}" x2="${x.toFixed(2)}" y2="${yBottom}"></line>`),
+      profile.yMin <= 0 && profile.yMax >= 0
+        ? `<line class="nn-activation-axis" x1="${xStart}" y1="${yZero.toFixed(2)}" x2="${xEnd}" y2="${yZero.toFixed(2)}"></line>`
+        : "",
+      profile.xMin <= 0 && profile.xMax >= 0
+        ? `<line class="nn-activation-axis" x1="${xZero.toFixed(2)}" y1="${yTop}" x2="${xZero.toFixed(2)}" y2="${yBottom}"></line>`
+        : "",
+      `<path class="nn-activation-curve" d="${curvePoints.join(" ")}"></path>`,
+      `<circle class="nn-activation-point" cx="${xZero.toFixed(2)}" cy="${centerPointY.toFixed(2)}" r="3.5"></circle>`,
+    ].join("");
+  }
+
+  function updateDidacticPanel(options = {}) {
+    if (!dom.lessonPanel || !dom.lessonTitle || !dom.lessonTag || !dom.lessonBody || !dom.lessonFormula || !dom.lessonBullets) {
+      return;
+    }
+
+    const displayRun = options.displayRun || state.currentDisplayRun || state.lastRun;
+    const metrics = options.metrics || state.currentMetrics || computeLossMetrics();
+
+    if (!displayRun) {
+      return;
+    }
+
+    const nodeMeta = options.nodeMeta || null;
+    const edgeInfo = options.edgeMeta || null;
+    const activationName = activationLabel(dom.activation?.value || state.activation || "tanh");
+    const normalizedInput = normalizeInput(displayRun.celsius);
+
+    let lesson = {
+      title: "Como leer esta red",
+      tag: "Base",
+      body: "Lee el lienzo de izquierda a derecha: entrada, calculo interno, salida, error y correccion. La idea es entender que la red transforma la entrada paso a paso.",
+      formula: `x=${formatDidacticNumber(displayRun.celsius, 1)} C -> x_norm=${formatDidacticNumber(normalizedInput, 3)} -> y=${formatDidacticNumber(displayRun.output, 2)} F -> target=${formatDidacticNumber(displayRun.target, 2)} F`,
+      bullets: [
+        `La entrada ${formatDidacticNumber(displayRun.celsius, 1)} C se normaliza para que el entrenamiento sea mas estable.`,
+        `Cada neurona oculta calcula z = suma(pesos * entradas) + sesgo y despues aplica ${activationName}.`,
+        `La salida es de regresion: devuelve un numero real y luego se compara con el objetivo para medir el error.`
+      ],
+    };
+
+    if (state.trainingPreview && !nodeMeta && !edgeInfo) {
+      lesson = {
+        title: "Backpropagation en marcha",
+        tag: "Entrenando",
+        body: "Ahora la red recorre ejemplos del dataset. En cada muestra calcula una salida, mide el error y ajusta los pesos un poco para aprender sin cambiar todo de golpe.",
+        formula: `Epoch ${state.trainingPreview.epochIndex}/${state.trainingPreview.epochCount} | muestra ${state.trainingPreview.sampleIndex}/${state.trainingPreview.sampleCount} | train loss=${formatDidacticNumber(metrics.trainLoss, 3)}`,
+        bullets: [
+          "Backpropagation no inventa reglas: solo indica que pesos deben subir o bajar para reducir el error.",
+          "Si el train loss y el test loss bajan con las epocas, la red esta generalizando mejor.",
+          "El entrenamiento usa 100 ejemplos y luego contrasta con 25 ejemplos de prueba para comprobar si realmente ha aprendido."
+        ],
+      };
+    }
+
+    if (edgeInfo) {
+      lesson = {
+        title: "Peso y contribucion",
+        tag: edgeInfo.weight >= 0 ? "Peso positivo" : "Peso negativo",
+        body: edgeInfo.weight >= 0
+          ? "Este peso empuja la senal en la misma direccion: si la activacion anterior sube, esta conexion tiende a aumentar la respuesta de la siguiente neurona."
+          : "Este peso compensa o resta parte de la senal: ayuda a que la red corrija, equilibre o reduzca la influencia de la activacion anterior.",
+        formula: `peso=${formatDidacticNumber(edgeInfo.weight, 4)} | contribucion=${formatDidacticNumber(edgeInfo.contribution, 4)}`,
+        bullets: [
+          "Los pesos son los numeros que la red ajusta durante el aprendizaje.",
+          "La contribucion indica cuanto esta aportando esta conexion concreta al calculo de la neurona siguiente.",
+          "Durante el entrenamiento este valor puede subir o bajar para acercar la salida al objetivo real."
+        ],
+      };
+    } else if (nodeMeta?.type === "input") {
+      lesson = {
+        title: "Entrada y normalizacion",
+        tag: "Entrada",
+        body: "Aqui ves el dato crudo que introduces. Antes de viajar por la red se reescala para que los calculos internos no se descompensen por trabajar con numeros demasiado grandes.",
+        formula: `${formatDidacticNumber(displayRun.celsius, 1)} C -> x normalizada = ${formatDidacticNumber(normalizedInput, 3)}`,
+        bullets: [
+          "Normalizar no cambia el significado del dato: solo cambia su escala para entrenar mejor.",
+          "Este problema parte de una sola entrada, por eso solo ves una neurona a la izquierda.",
+          "La red intenta convertir este valor en Fahrenheit despues de pasar por las capas ocultas."
+        ],
+      };
+    } else if (nodeMeta?.type === "hidden") {
+      lesson = {
+        title: `Neurona oculta h${nodeMeta.neuronIndex + 1}`,
+        tag: activationName,
+        body: "Una neurona oculta mezcla lo que recibe, suma un sesgo y aplica una activacion no lineal. Esa no linealidad es la que permite aprender relaciones mas complejas que una simple regla recta.",
+        formula: `z=${formatDidacticNumber(nodeMeta.z, 4)} -> ${activationName}(z) = a=${formatDidacticNumber(nodeMeta.activation, 4)}`,
+        bullets: [
+          "z es la suma interna antes de activar la neurona.",
+          `La activacion ${activationName} transforma ese valor y decide que senal sigue avanzando.`,
+          "Sin activacion, varias capas seguidas se comportarian casi como una sola cuenta lineal."
+        ],
+      };
+    } else if (nodeMeta?.type === "output") {
+      const error = displayRun.target - displayRun.output;
+      lesson = {
+        title: "Salida de regresion",
+        tag: "Salida",
+        body: "La ultima neurona no elige una clase. Como este problema es de regresion, devuelve directamente un numero real: la temperatura estimada en Fahrenheit.",
+        formula: `y=${formatDidacticNumber(displayRun.output, 2)} F | target=${formatDidacticNumber(displayRun.target, 2)} F | error=${formatDidacticNumber(error, 2)}`,
+        bullets: [
+          "La salida se compara con el valor real para calcular la perdida.",
+          `Si el error es grande, la red tiene que corregir mas sus pesos. Loss actual = ${formatDidacticNumber(displayRun.loss, 3)}.`,
+          "Como aqui queremos un numero continuo, tiene sentido una salida lineal y una perdida de regresion."
+        ],
+      };
+    }
+
+    dom.lessonTitle.textContent = lesson.title;
+    dom.lessonTag.textContent = lesson.tag;
+    dom.lessonBody.textContent = lesson.body;
+    dom.lessonFormula.textContent = lesson.formula;
+    dom.lessonBullets.innerHTML = lesson.bullets.map((item) => `<li>${item}</li>`).join("");
+    renderActivationPreview();
+  }
+
   function buildNodeTooltipHtml(meta, currentRun) {
     const title = meta.type === "hidden"
       ? `Neurona ${meta.neuronIndex + 1}`
@@ -753,13 +1197,13 @@
   }
 
   function renderTrainingChart(metrics) {
-    if (!dom.chartSvg || !dom.trainingChart) {
+    if (!dom.chartSvg || !dom.trainingChart || dom.trainingChart.classList.contains("is-hidden")) {
       return;
     }
 
     const width = Math.max(320, Math.floor(dom.chartSvg.clientWidth || dom.trainingChart.clientWidth || 320));
     const height = Math.max(110, Math.floor(dom.chartSvg.clientHeight || 110));
-    const padding = { top: 24, right: 12, bottom: 24, left: 44 };
+    const padding = { top: 18, right: 8, bottom: 18, left: 34 };
     const plotWidth = Math.max(1, width - padding.left - padding.right);
     const plotHeight = Math.max(1, height - padding.top - padding.bottom);
     const previewEntry = state.trainingPreview
@@ -810,14 +1254,14 @@
 
     const note = createSvg("text", {
       x: padding.left,
-      y: 12,
+      y: 10,
       class: "nn-chart-note",
     });
-    note.textContent = "Score (inverso del loss) | arriba = mejor";
+    note.textContent = "Score | arriba = mejor";
     dom.chartSvg.appendChild(note);
 
-    const legendStartX = Math.max(padding.left + 170, width - padding.right - 152);
-    const legendY = 11;
+    const legendStartX = Math.max(padding.left + 116, width - padding.right - 116);
+    const legendY = 9;
     const trainLegendLine = createSvg("line", {
       x1: legendStartX,
       y1: legendY,
@@ -830,10 +1274,10 @@
       y: legendY + 3,
       class: "nn-chart-legend-label",
     });
-    trainLegendLabel.textContent = "Train (verde)";
+    trainLegendLabel.textContent = "Train";
     dom.chartSvg.append(trainLegendLine, trainLegendLabel);
 
-    const testLegendX = legendStartX + 82;
+    const testLegendX = legendStartX + 54;
     const testLegendLine = createSvg("line", {
       x1: testLegendX,
       y1: legendY,
@@ -846,7 +1290,7 @@
       y: legendY + 3,
       class: "nn-chart-legend-label",
     });
-    testLegendLabel.textContent = "Test (azul)";
+    testLegendLabel.textContent = "Test";
     dom.chartSvg.append(testLegendLine, testLegendLabel);
 
     dom.chartSvg.appendChild(createSvg("rect", {
@@ -1057,12 +1501,15 @@
     syncNetworkArrays();
     updateTargetField();
     updateLayerControls();
+    syncInfoCardVisibility();
     if (!state.trainingPreview?.run) {
       state.lastRun = evaluateCurrentInput();
     }
 
     const displayRun = state.trainingPreview?.run || state.lastRun || evaluateCurrentInput();
     const metrics = skipHistory ? computeLossMetrics() : recordTrainingSnapshot();
+    state.currentMetrics = metrics;
+    state.currentDisplayRun = displayRun;
     updateStatusText(metrics, displayRun);
     renderTrainingChart(metrics);
 
@@ -1080,7 +1527,9 @@
     };
 
     const maxLayerSize = Math.max(...layerSizes);
-    const chartReservedHeight = dom.trainingChart ? (dom.trainingChart.offsetHeight + 20) : 0;
+    const chartReservedHeight = dom.trainingChart && !dom.trainingChart.classList.contains("is-hidden")
+      ? (dom.trainingChart.offsetHeight + 20)
+      : 0;
     const xPadding = 78;
     const xStart = xPadding;
     const xEnd = width - xPadding;
@@ -1292,6 +1741,7 @@
         state.hoverEdgeKey = null;
         syncHighlightState();
         setTooltip(buildNodeTooltipHtml(meta, displayRun), event.clientX, event.clientY);
+        updateDidacticPanel({ displayRun, metrics, nodeMeta: meta });
       });
 
       meta.group.addEventListener("mousemove", (event) => {
@@ -1304,6 +1754,7 @@
         state.hoverNodeKey = null;
         hideTooltip();
         syncHighlightState();
+        updateDidacticPanel({ displayRun, metrics });
       });
     });
 
@@ -1313,10 +1764,11 @@
         state.hoverNodeKey = null;
         syncHighlightState();
         setTooltip(
-          `<strong>Conexion</strong><br>Peso: ${meta.weight.toFixed(4)}<br>Contribucion: ${meta.contribution.toFixed(4)}`,
+          `<strong>Conexion</strong><br>Peso: ${meta.weight.toFixed(4)}<br>Contribucion: ${meta.contribution.toFixed(4)}<br>${meta.weight >= 0 ? "Peso positivo: empuja la senal." : "Peso negativo: compensa parte de la senal."}`,
           event.clientX,
           event.clientY
         );
+        updateDidacticPanel({ displayRun, metrics, edgeMeta: meta });
       };
 
       const moveHandler = (event) => {
@@ -1329,6 +1781,7 @@
         state.hoverEdgeKey = null;
         hideTooltip();
         syncHighlightState();
+        updateDidacticPanel({ displayRun, metrics });
       };
 
       meta.line.addEventListener("mouseenter", enterHandler);
@@ -1343,6 +1796,13 @@
     });
 
     syncHighlightState();
+    updateDidacticPanel({
+      displayRun,
+      metrics,
+      nodeMeta: nodeMap.get(state.hoverNodeKey) || null,
+      edgeMeta: edgeMeta.find((item) => item.key === state.hoverEdgeKey) || null,
+    });
+    clampFloatingCardsToCanvas();
   }
 
   function handleForward() {
@@ -1358,6 +1818,14 @@
   }
 
   function bindEvents() {
+    const setActivationPreviewHover = (isHovered) => {
+      if (state.activationPreviewHovered === isHovered) {
+        return;
+      }
+      state.activationPreviewHovered = isHovered;
+      renderActivationPreview();
+    };
+
     dom.celsiusInput?.addEventListener("input", () => {
       updateTargetField();
       render();
@@ -1393,6 +1861,30 @@
       render();
     });
 
+    dom.showTrainingChart?.addEventListener("change", () => {
+      render();
+    });
+
+    dom.showLessonPanel?.addEventListener("change", () => {
+      render();
+    });
+
+    dom.activationPreviewWrap?.addEventListener("mouseenter", () => {
+      setActivationPreviewHover(true);
+    });
+
+    dom.activationPreviewWrap?.addEventListener("mouseleave", () => {
+      setActivationPreviewHover(false);
+    });
+
+    dom.activationPreviewWrap?.addEventListener("focus", () => {
+      setActivationPreviewHover(true);
+    });
+
+    dom.activationPreviewWrap?.addEventListener("blur", () => {
+      setActivationPreviewHover(false);
+    });
+
     dom.btnForward?.addEventListener("click", handleForward);
     dom.btnTrain?.addEventListener("click", handleTrain);
     dom.btnReset?.addEventListener("click", () => {
@@ -1409,7 +1901,9 @@
     updateLayerControls();
     resetNetwork();
     bindEvents();
+    renderActivationPreview();
     render();
+    initializeFloatingCards();
   }
 
   initializeApp().catch((error) => {
