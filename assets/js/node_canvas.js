@@ -3,8 +3,16 @@
   const $ = (id) => document.getElementById(id);
 
   const dom = {
-    celsiusInput: $("nnCelsiusInput"),
+    examplePreset: $("nnExamplePreset"),
+    exampleTitle: $("nnExampleTitle"),
+    exampleMode: $("nnExampleMode"),
+    exampleIntro: $("nnExampleIntro"),
+    inputFields: [$("nnInputField1"), $("nnInputField2"), $("nnInputField3")],
+    inputLabels: [$("nnInputLabel1"), $("nnInputLabel2"), $("nnInputLabel3")],
+    inputInputs: [$("nnInput1"), $("nnInput2"), $("nnInput3")],
     targetF: $("nnTargetF"),
+    targetLabel: $("nnTargetLabel"),
+    targetFormula: $("nnTargetFormula"),
     layerCount: $("nnLayerCount"),
     layerRows: [$("nnLayerRow1"), $("nnLayerRow2"), $("nnLayerRow3"), $("nnLayerRow4")],
     layerSizes: [$("nnLayerSize1"), $("nnLayerSize2"), $("nnLayerSize3"), $("nnLayerSize4")],
@@ -48,20 +56,99 @@
     return;
   }
 
-  const TRAINING_SET = Array.from({ length: 100 }, (_, index) => {
-    const celsius = -40 + index;
-    return { celsius, fahrenheit: celsiusToFahrenheit(celsius) };
-  });
-
-  const TEST_SET = Array.from({ length: 25 }, (_, index) => {
-    const celsius = -37.5 + (index * 5);
-    return { celsius, fahrenheit: celsiusToFahrenheit(celsius) };
-  });
+  const EXAMPLE_PRESETS = {
+    "celsius-fahrenheit": {
+      key: "celsius-fahrenheit",
+      title: "RNA Celsius -> Fahrenheit",
+      intro: "Red de regresion configurable para aprender la conversion de grados centigrados a Fahrenheit.",
+      modeLabel: "1 entrada",
+      inputs: [
+        { label: "Celsius (entrada)", shortLabel: "temp", nodeLabel: "C", step: 0.1, defaultValue: 25, unit: "C", digits: 1 },
+      ],
+      targetLabel: "Objetivo Fahrenheit",
+      formulaLabel: "Objetivo real: F = C * 9 / 5 + 32",
+      connectionHint: "Modelo de regresion para convertir Celsius a Fahrenheit",
+      outputUnit: "F",
+      trainingCount: 100,
+      testCount: 25,
+      trainInputAt: (index) => [-40 + index],
+      testInputAt: (index) => [-37.5 + (index * 5)],
+      targetFn: ([celsius]) => (celsius * 9 / 5) + 32,
+    },
+    "coste-pintura": {
+      key: "coste-pintura",
+      title: "RNA Coste de pintura",
+      intro: "Ejemplo con 2 entradas donde el objetivo depende del area de la pared. La multiplicacion entre ancho y alto hace que ya no sea una regla puramente lineal.",
+      modeLabel: "2 entradas",
+      inputs: [
+        { label: "Ancho pared (m)", shortLabel: "ancho", nodeLabel: "W", step: 0.1, defaultValue: 4.2, unit: "m", digits: 1 },
+        { label: "Alto pared (m)", shortLabel: "alto", nodeLabel: "H", step: 0.1, defaultValue: 2.7, unit: "m", digits: 1 },
+      ],
+      targetLabel: "Objetivo coste",
+      formulaLabel: "Objetivo real: coste = (ancho * alto * 12) + 18",
+      connectionHint: "Modelo de regresion con 2 entradas para estimar un coste a partir de area",
+      outputUnit: "EUR",
+      trainingCount: 100,
+      testCount: 25,
+      trainInputAt: (index) => [
+        2 + ((index % 10) * 0.6),
+        2 + (Math.floor(index / 10) * 0.25),
+      ],
+      testInputAt: (index) => [
+        2.3 + ((index % 5) * 1.05),
+        2.1 + (Math.floor(index / 5) * 0.38),
+      ],
+      targetFn: ([width, height]) => (width * height * 12) + 18,
+    },
+    "consumo-electrico": {
+      key: "consumo-electrico",
+      title: "RNA Consumo electrico",
+      intro: "Ejemplo con 3 entradas donde el consumo depende de temperatura, hora y maquinas activas, incluyendo interacciones entre variables.",
+      modeLabel: "3 entradas",
+      inputs: [
+        { label: "Temperatura exterior", shortLabel: "temp", nodeLabel: "T", step: 1, defaultValue: 18, unit: "C", digits: 0 },
+        { label: "Hora del turno", shortLabel: "hora", nodeLabel: "H", step: 1, defaultValue: 14, unit: "h", digits: 0 },
+        { label: "Maquinas activas", shortLabel: "maq", nodeLabel: "M", step: 1, defaultValue: 4, unit: "", digits: 0 },
+      ],
+      targetLabel: "Objetivo consumo",
+      formulaLabel: "Objetivo real: kWh = 20 + 0.9*T + 0.25*H + 7*M + (M*H)/12 + 0.02*(T-20)^2",
+      connectionHint: "Modelo de regresion con 3 entradas para estimar consumo electrico",
+      outputUnit: "kWh",
+      trainingCount: 100,
+      testCount: 25,
+      trainInputAt: (index) => [
+        6 + ((index % 10) * 3),
+        (index * 3) % 24,
+        1 + (index % 8),
+      ],
+      testInputAt: (index) => [
+        8 + ((index % 5) * 5),
+        (2 + (index * 5)) % 24,
+        2 + (index % 6),
+      ],
+      targetFn: ([temperature, hour, machines]) => (
+        20
+        + (0.9 * temperature)
+        + (0.25 * hour)
+        + (7 * machines)
+        + ((machines * hour) / 12)
+        + (0.02 * ((temperature - 20) ** 2))
+      ),
+    },
+  };
 
   const state = {
     network: null,
     hiddenLayers: [],
+    hiddenActivations: [],
     outputActivation: "linear",
+    currentExampleKey: "celsius-fahrenheit",
+    trainingSet: [],
+    testSet: [],
+    inputNormCenter: [],
+    inputNormScale: [],
+    targetNormCenter: 0,
+    targetNormScale: 1,
     previewActivation: "tanh",
     epochs: 0,
     lastRun: null,
@@ -239,20 +326,146 @@
     clampFloatingCardsToCanvas();
   }
 
-  function celsiusToFahrenheit(celsius) {
-    return (celsius * 9 / 5) + 32;
+  function currentExample() {
+    return EXAMPLE_PRESETS[state.currentExampleKey] || EXAMPLE_PRESETS["celsius-fahrenheit"];
   }
 
-  function normalizeInput(celsius) {
-    return celsius / 100;
+  function createExampleDataset(example, mode) {
+    const count = mode === "train" ? example.trainingCount : example.testCount;
+    const inputBuilder = mode === "train" ? example.trainInputAt : example.testInputAt;
+
+    return Array.from({ length: count }, (_, index) => {
+      const inputs = inputBuilder(index);
+      return { inputs, target: example.targetFn(inputs) };
+    });
   }
 
-  function normalizeTarget(fahrenheit) {
-    return (fahrenheit - 32) / 180;
+  function updateNormalizationRanges() {
+    const allSamples = [...state.trainingSet, ...state.testSet];
+    if (!allSamples.length) {
+      state.inputNormCenter = [];
+      state.inputNormScale = [];
+      state.targetNormCenter = 0;
+      state.targetNormScale = 1;
+      return;
+    }
+
+    const inputCount = currentExample().inputs.length;
+    const targetValues = allSamples.map((sample) => sample.target);
+    const targetMin = Math.min(...targetValues);
+    const targetMax = Math.max(...targetValues);
+    state.inputNormCenter = [];
+    state.inputNormScale = [];
+
+    for (let inputIndex = 0; inputIndex < inputCount; inputIndex += 1) {
+      const inputValues = allSamples.map((sample) => sample.inputs[inputIndex]);
+      const inputMin = Math.min(...inputValues);
+      const inputMax = Math.max(...inputValues);
+      state.inputNormCenter.push((inputMin + inputMax) / 2);
+      state.inputNormScale.push(Math.max((inputMax - inputMin) / 2, 1));
+    }
+
+    state.targetNormCenter = (targetMin + targetMax) / 2;
+    state.targetNormScale = Math.max((targetMax - targetMin) / 2, 1);
+  }
+
+  function refreshHintText() {
+    if (!dom.hint) {
+      return;
+    }
+
+    dom.hint.textContent = `El entrenamiento usa ${state.trainingSet.length} ejemplos, evalua ${state.testSet.length} casos de prueba y muestra la evolucion de la perdida. TensorFlow.js backend: ${state.tfBackend}.`;
+  }
+
+  function applyExamplePreset(exampleKey, options = {}) {
+    const { preserveInput = false } = options;
+    const example = EXAMPLE_PRESETS[exampleKey] || EXAMPLE_PRESETS["celsius-fahrenheit"];
+
+    state.currentExampleKey = example.key;
+    state.trainingSet = createExampleDataset(example, "train");
+    state.testSet = createExampleDataset(example, "test");
+    updateNormalizationRanges();
+
+    if (dom.examplePreset && dom.examplePreset.value !== example.key) {
+      dom.examplePreset.value = example.key;
+    }
+    if (dom.exampleTitle) {
+      dom.exampleTitle.textContent = example.title;
+    }
+    if (dom.exampleMode) {
+      dom.exampleMode.textContent = example.modeLabel;
+    }
+    if (dom.exampleIntro) {
+      dom.exampleIntro.textContent = example.intro;
+    }
+    dom.inputFields.forEach((field, index) => {
+      const inputMeta = example.inputs[index];
+      const label = dom.inputLabels[index];
+      const input = dom.inputInputs[index];
+      if (!field || !label || !input) {
+        return;
+      }
+      const isVisible = !!inputMeta;
+      field.classList.toggle("is-hidden", !isVisible);
+      if (!isVisible) {
+        input.disabled = true;
+        return;
+      }
+
+      label.textContent = inputMeta.label;
+      input.disabled = false;
+      input.step = String(inputMeta.step ?? 0.1);
+      if (inputMeta.min !== undefined) {
+        input.min = String(inputMeta.min);
+      } else {
+        input.removeAttribute("min");
+      }
+      if (inputMeta.max !== undefined) {
+        input.max = String(inputMeta.max);
+      } else {
+        input.removeAttribute("max");
+      }
+      if (!preserveInput) {
+        input.value = String(inputMeta.defaultValue);
+      }
+    });
+    if (dom.targetLabel) {
+      dom.targetLabel.textContent = example.targetLabel;
+    }
+    if (dom.targetFormula) {
+      dom.targetFormula.textContent = example.formulaLabel;
+    }
+    if (dom.connectionHint) {
+      dom.connectionHint.textContent = example.connectionHint;
+    }
+
+    refreshHintText();
+    updateTargetField();
+  }
+
+  function currentInputValues() {
+    const example = currentExample();
+    return example.inputs.map((inputMeta, index) => (
+      parseNumber(dom.inputInputs[index]?.value, inputMeta.defaultValue)
+    ));
+  }
+
+  function computeTargetValue(inputValues) {
+    return currentExample().targetFn(inputValues);
+  }
+
+  function normalizeInput(inputValues) {
+    return inputValues.map((value, index) => (
+      (value - (state.inputNormCenter[index] ?? 0)) / (state.inputNormScale[index] ?? 1)
+    ));
+  }
+
+  function normalizeTarget(target) {
+    return (target - state.targetNormCenter) / state.targetNormScale;
   }
 
   function denormalizeOutput(value) {
-    return (value * 180) + 32;
+    return (value * state.targetNormScale) + state.targetNormCenter;
   }
 
   function parseNumber(value, fallback) {
@@ -316,6 +529,13 @@
     return tensor.clone();
   }
 
+  function normalizeActivationName(name, fallback = "tanh") {
+    if (name === "linear" || name === "sigmoid" || name === "relu" || name === "tanh") {
+      return name;
+    }
+    return fallback;
+  }
+
   function randomWeight(prevSize) {
     const scale = Math.sqrt(2 / Math.max(prevSize, 1));
     return (Math.random() * 2 - 1) * 0.55 * scale;
@@ -328,12 +548,23 @@
       .map((select) => Math.max(1, Math.min(5, Number.parseInt(select?.value || "1", 10))));
   }
 
+  function activeHiddenActivations() {
+    const count = Math.max(1, Math.min(4, Number.parseInt(dom.layerCount?.value || "1", 10)));
+    return dom.layerActivations
+      .slice(0, count)
+      .map((select) => normalizeActivationName(select?.value, "tanh"));
+  }
+
+  function selectedOutputActivation() {
+    return normalizeActivationName(dom.outputActivation?.value, "linear");
+  }
+
   function updateTargetField() {
     if (!dom.targetF) {
       return;
     }
-    const celsius = parseNumber(dom.celsiusInput?.value, 25);
-    const targetValue = celsiusToFahrenheit(celsius).toFixed(1).replace(/\.0$/, "");
+    const inputs = currentInputValues();
+    const targetValue = computeTargetValue(inputs).toFixed(1).replace(/\.0$/, "");
     if ("value" in dom.targetF) {
       dom.targetF.value = targetValue;
       return;
@@ -343,25 +574,32 @@
 
   function updateLayerControls() {
     const count = Math.max(1, Math.min(4, Number.parseInt(dom.layerCount?.value || "1", 10)));
-    dom.layerSizes.forEach((select, index) => {
-      if (!select || !select.parentElement) {
+    dom.layerRows.forEach((row, index) => {
+      const sizeSelect = dom.layerSizes[index];
+      const activationSelect = dom.layerActivations[index];
+      if (!row) {
         return;
       }
       const enabled = index < count;
-      select.disabled = !enabled;
-      select.parentElement.classList.toggle("is-disabled", !enabled);
+      if (sizeSelect) {
+        sizeSelect.disabled = !enabled;
+      }
+      if (activationSelect) {
+        activationSelect.disabled = !enabled;
+      }
+      row.classList.toggle("is-disabled", !enabled);
     });
   }
 
-  function architectureSignature(hiddenSizes) {
-    return `1-${hiddenSizes.join("-")}-1`;
+  function architectureSignature(inputCount, hiddenSizes) {
+    return `${inputCount}-${hiddenSizes.join("-")}-1`;
   }
 
   function computeLossMetrics() {
     return {
       epoch: state.epochs,
-      trainLoss: evaluateDataset(TRAINING_SET),
-      testLoss: evaluateDataset(TEST_SET),
+      trainLoss: evaluateDataset(state.trainingSet),
+      testLoss: evaluateDataset(state.testSet),
     };
   }
 
@@ -409,23 +647,22 @@
 
     await tfLib.ready();
     state.tfBackend = tfLib.getBackend();
-
-    if (dom.hint) {
-      dom.hint.textContent = `El entrenamiento usa 100 ejemplos, evalua 25 casos de prueba y muestra la evolucion de la perdida. TensorFlow.js backend: ${state.tfBackend}.`;
-    }
+    refreshHintText();
   }
 
   function resetNetwork() {
     stopTrainingBatch();
     disposeNetwork();
     state.hiddenSizes = activeHiddenSizes();
-    state.activation = dom.activation?.value || "tanh";
+    state.hiddenActivations = activeHiddenActivations();
+    state.outputActivation = selectedOutputActivation();
     state.epochs = 0;
     state.hoverNodeKey = null;
     state.hoverEdgeKey = null;
     state.history = [];
 
-    const layerSizes = [1, ...state.hiddenSizes, 1];
+    const inputCount = currentExample().inputs.length;
+    const layerSizes = [inputCount, ...state.hiddenSizes, 1];
     const weightVars = [];
     const biasVars = [];
     const networkId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
@@ -448,7 +685,7 @@
     }
 
     state.network = {
-      signature: architectureSignature(state.hiddenSizes),
+      signature: architectureSignature(inputCount, state.hiddenSizes),
       layerSizes,
       weightVars,
       biasVars,
@@ -464,16 +701,20 @@
 
   function ensureNetwork() {
     const nextHiddenSizes = activeHiddenSizes();
-    const nextSignature = architectureSignature(nextHiddenSizes);
-    const nextActivation = dom.activation?.value || "tanh";
+    const nextSignature = architectureSignature(currentExample().inputs.length, nextHiddenSizes);
+    const nextHiddenActivations = activeHiddenActivations();
+    const nextOutputActivation = selectedOutputActivation();
+    const hiddenActivationsChanged = JSON.stringify(state.hiddenActivations) !== JSON.stringify(nextHiddenActivations);
+    const outputActivationChanged = state.outputActivation !== nextOutputActivation;
 
     if (!state.network || state.network.signature !== nextSignature) {
       resetNetwork();
       return;
     }
 
-    if (state.activation !== nextActivation) {
-      state.activation = nextActivation;
+    if (hiddenActivationsChanged || outputActivationChanged) {
+      state.hiddenActivations = nextHiddenActivations;
+      state.outputActivation = nextOutputActivation;
       state.lastRun = evaluateCurrentInput();
     }
   }
@@ -482,7 +723,7 @@
     ensureNetwork();
 
     return tfLib.tidy(() => {
-      let current = tfLib.tensor2d([[normalizedInput]], [1, 1]);
+      let current = tfLib.tensor2d([normalizedInput], [1, normalizedInput.length]);
       const activations = [Array.from(current.dataSync())];
       const zs = [];
 
@@ -491,7 +732,10 @@
         const zTensor = tfLib.matMul(current, state.network.weightVars[layerIndex], false, true)
           .add(state.network.biasVars[layerIndex].reshape([1, nextSize]));
         const isOutputLayer = layerIndex === state.network.weightVars.length - 1;
-        const nextTensor = isOutputLayer ? zTensor : applyActivationTensor(state.activation, zTensor);
+        const layerActivation = isOutputLayer
+          ? state.outputActivation
+          : (state.hiddenActivations[layerIndex] || "tanh");
+        const nextTensor = applyActivationTensor(layerActivation, zTensor);
 
         zs.push(Array.from(zTensor.dataSync()));
         activations.push(Array.from(nextTensor.dataSync()));
@@ -511,22 +755,26 @@
     }
 
     return tfLib.tidy(() => {
-      let current = tfLib.tensor2d(normalizedInputs.map((value) => [value]), [normalizedInputs.length, 1]);
+      const inputCount = normalizedInputs[0]?.length || currentExample().inputs.length;
+      let current = tfLib.tensor2d(normalizedInputs, [normalizedInputs.length, inputCount]);
 
       for (let layerIndex = 0; layerIndex < state.network.weightVars.length; layerIndex += 1) {
         const nextSize = state.network.layerSizes[layerIndex + 1];
         const zTensor = tfLib.matMul(current, state.network.weightVars[layerIndex], false, true)
           .add(state.network.biasVars[layerIndex].reshape([1, nextSize]));
         const isOutputLayer = layerIndex === state.network.weightVars.length - 1;
-        current = isOutputLayer ? zTensor : applyActivationTensor(state.activation, zTensor);
+        const layerActivation = isOutputLayer
+          ? state.outputActivation
+          : (state.hiddenActivations[layerIndex] || "tanh");
+        current = applyActivationTensor(layerActivation, zTensor);
       }
 
       return Array.from(current.dataSync());
     });
   }
 
-  function evaluateSample(celsius) {
-    const forward = forwardNormalized(normalizeInput(celsius));
+  function evaluateSample(inputValues) {
+    const forward = forwardNormalized(normalizeInput(inputValues));
     return {
       ...forward,
       output: denormalizeOutput(forward.normalizedOutput),
@@ -534,13 +782,13 @@
   }
 
   function evaluateCurrentInput() {
-    const celsius = parseNumber(dom.celsiusInput?.value, 25);
-    const target = celsiusToFahrenheit(celsius);
-    const result = evaluateSample(celsius);
+    const inputs = currentInputValues();
+    const target = computeTargetValue(inputs);
+    const result = evaluateSample(inputs);
     const loss = 0.5 * ((result.output - target) ** 2);
 
     return {
-      celsius,
+      inputs,
       target,
       ...result,
       loss,
@@ -552,12 +800,12 @@
       return 0;
     }
 
-    const normalizedOutputs = predictBatchNormalized(dataset.map((sample) => normalizeInput(sample.celsius)));
+    const normalizedOutputs = predictBatchNormalized(dataset.map((sample) => normalizeInput(sample.inputs)));
     let totalLoss = 0;
 
     for (let index = 0; index < dataset.length; index += 1) {
       const output = denormalizeOutput(normalizedOutputs[index]);
-      totalLoss += 0.5 * ((output - dataset[index].fahrenheit) ** 2);
+      totalLoss += 0.5 * ((output - dataset[index].target) ** 2);
     }
 
     return totalLoss / dataset.length;
@@ -570,18 +818,21 @@
     }
 
     const learningRate = Math.max(0.0001, parseNumber(dom.learningRate?.value, 0.02));
-    const input = normalizeInput(sample.celsius);
-    const target = normalizeTarget(sample.fahrenheit);
+    const input = normalizeInput(sample.inputs);
+    const target = normalizeTarget(sample.target);
     const gradientPack = tfLib.tidy(() => {
       const result = tfLib.variableGrads(() => {
-        let current = tfLib.tensor2d([[input]], [1, 1]);
+        let current = tfLib.tensor2d([input], [1, input.length]);
 
         for (let layerIndex = 0; layerIndex < state.network.weightVars.length; layerIndex += 1) {
           const nextSize = state.network.layerSizes[layerIndex + 1];
           const zTensor = tfLib.matMul(current, state.network.weightVars[layerIndex], false, true)
             .add(state.network.biasVars[layerIndex].reshape([1, nextSize]));
           const isOutputLayer = layerIndex === state.network.weightVars.length - 1;
-          current = isOutputLayer ? zTensor : applyActivationTensor(state.activation, zTensor);
+          const layerActivation = isOutputLayer
+            ? state.outputActivation
+            : (state.hiddenActivations[layerIndex] || "tanh");
+          current = applyActivationTensor(layerActivation, zTensor);
         }
 
         return current.sub(target).square().mul(0.5).asScalar();
@@ -610,11 +861,11 @@
 
     const postUpdate = forwardNormalized(input);
     const output = denormalizeOutput(postUpdate.normalizedOutput);
-    const loss = 0.5 * ((output - sample.fahrenheit) ** 2);
+    const loss = 0.5 * ((output - sample.target) ** 2);
 
     return {
-      celsius: sample.celsius,
-      target: sample.fahrenheit,
+      inputs: sample.inputs,
+      target: sample.target,
       activations: postUpdate.activations,
       zs: postUpdate.zs,
       normalizedOutput: postUpdate.normalizedOutput,
@@ -629,7 +880,7 @@
       ensureNetwork();
     }
 
-    for (const sample of TRAINING_SET) {
+    for (const sample of state.trainingSet) {
       trainOneSample(sample, { skipEnsure: true });
     }
 
@@ -702,7 +953,7 @@
         return;
       }
 
-      const sample = TRAINING_SET[sampleIndex];
+      const sample = state.trainingSet[sampleIndex];
       const sampleRun = trainOneSample(sample, { skipEnsure: true });
       const epochDisplayIndex = Math.min(totalEpochs, completedEpochs + 1);
 
@@ -710,13 +961,13 @@
         epochIndex: epochDisplayIndex,
         epochCount: totalEpochs,
         sampleIndex: sampleIndex + 1,
-        sampleCount: TRAINING_SET.length,
+        sampleCount: state.trainingSet.length,
         run: sampleRun,
       };
 
       sampleIndex += 1;
 
-      if (sampleIndex >= TRAINING_SET.length) {
+      if (sampleIndex >= state.trainingSet.length) {
         sampleIndex = 0;
         completedEpochs += 1;
         state.epochs = completedEpochs;
@@ -870,6 +1121,21 @@
       .replace(/(\.\d*?)0+$/, "$1");
   }
 
+  function formatValueWithUnit(value, unit = "", digits = 2) {
+    const formatted = formatDidacticNumber(value, digits);
+    return unit ? `${formatted} ${unit}` : formatted;
+  }
+
+  function formatInputSummary(values, separator = " | ", digitsOverride = null) {
+    const example = currentExample();
+    return example.inputs.map((inputMeta, index) => {
+      const label = inputMeta.shortLabel || `x${index + 1}`;
+      const digits = digitsOverride ?? inputMeta.digits ?? 1;
+      const rendered = formatValueWithUnit(values[index], inputMeta.unit, digits);
+      return `${label}=${rendered}`;
+    }).join(separator);
+  }
+
   function activationLabel(name) {
     if (name === "relu") {
       return "ReLU";
@@ -879,6 +1145,9 @@
     }
     if (name === "sigmoid") {
       return "sigmoid";
+    }
+    if (name === "linear") {
+      return "lineal";
     }
     return name || "lineal";
   }
@@ -897,6 +1166,23 @@
   }
 
   function activationProfile(name) {
+    if (name === "linear") {
+      return {
+        key: "linear",
+        label: "x",
+        color: "#1f6c5b",
+        softColor: "rgba(31, 108, 91, 0.12)",
+        borderColor: "rgba(31, 108, 91, 0.24)",
+        textColor: "#165346",
+        glowColor: "rgba(31, 108, 91, 0.12)",
+        xMin: -3,
+        xMax: 3,
+        yMin: -3,
+        yMax: 3,
+        idleText: "La activacion lineal deja pasar el valor tal cual: f(z)=z.",
+        hoverText: "Lineal: f(z)=z. Rango (-inf, +inf). En regresion deja salir cualquier valor real sin comprimirlo.",
+      };
+    }
     if (name === "relu") {
       return {
         key: "relu",
@@ -948,6 +1234,21 @@
     };
   }
 
+  function resolvePreviewActivationName(options = {}) {
+    const nodeMeta = options.nodeMeta || null;
+    const edgeInfo = options.edgeMeta || null;
+
+    if (edgeInfo?.toActivationName) {
+      return edgeInfo.toActivationName;
+    }
+
+    if (nodeMeta?.activationName) {
+      return nodeMeta.activationName;
+    }
+
+    return state.hiddenActivations[0] || state.outputActivation || "tanh";
+  }
+
   function mapActivationPoint(value, domainMin, domainMax, rangeMin, rangeMax) {
     if (domainMax === domainMin) {
       return rangeMin;
@@ -956,12 +1257,12 @@
     return rangeMin + ((rangeMax - rangeMin) * ratio);
   }
 
-  function renderActivationPreview() {
+  function renderActivationPreview(activationName = null) {
     if (!dom.activationCard || !dom.activationBadge || !dom.activationPreview || !dom.activationHint) {
       return;
     }
 
-    const profile = activationProfile(dom.activation?.value || state.activation || "tanh");
+    const profile = activationProfile(activationName || state.previewActivation || state.hiddenActivations[0] || state.outputActivation || "tanh");
     const width = 220;
     const height = 86;
     const paddingX = 16;
@@ -999,6 +1300,7 @@
     dom.activationCard.style.setProperty("--activation-text", profile.textColor);
     dom.activationCard.style.setProperty("--activation-glow", profile.glowColor);
     dom.activationPreview.style.setProperty("--curve-color", profile.color);
+    state.previewActivation = profile.key;
     dom.activationBadge.textContent = profile.label;
     dom.activationPreviewWrap?.setAttribute("aria-label", `${profile.label}. ${profile.hoverText}`);
     dom.activationHint.textContent = state.activationPreviewHovered ? profile.hoverText : profile.idleText;
@@ -1031,18 +1333,23 @@
 
     const nodeMeta = options.nodeMeta || null;
     const edgeInfo = options.edgeMeta || null;
-    const activationName = activationLabel(dom.activation?.value || state.activation || "tanh");
-    const normalizedInput = normalizeInput(displayRun.celsius);
+    const previewActivationName = resolvePreviewActivationName({ nodeMeta, edgeMeta: edgeInfo });
+    const example = currentExample();
+    const normalizedInput = normalizeInput(displayRun.inputs);
+    const inputSummary = formatInputSummary(displayRun.inputs);
+    const normalizedSummary = normalizedInput
+      .map((value, index) => `x${index + 1}=${formatDidacticNumber(value, 3)}`)
+      .join(" | ");
 
     let lesson = {
       title: "Como leer esta red",
       tag: "Base",
       body: "Lee el lienzo de izquierda a derecha: entrada, calculo interno, salida, error y correccion. La idea es entender que la red transforma la entrada paso a paso.",
-      formula: `x=${formatDidacticNumber(displayRun.celsius, 1)} C -> x_norm=${formatDidacticNumber(normalizedInput, 3)} -> y=${formatDidacticNumber(displayRun.output, 2)} F -> target=${formatDidacticNumber(displayRun.target, 2)} F`,
+      formula: `${inputSummary} -> x_norm=${normalizedSummary} -> y=${formatValueWithUnit(displayRun.output, example.outputUnit, 2)} -> target=${formatValueWithUnit(displayRun.target, example.outputUnit, 2)}`,
       bullets: [
-        `La entrada ${formatDidacticNumber(displayRun.celsius, 1)} C se normaliza para que el entrenamiento sea mas estable.`,
-        `Cada neurona oculta calcula z = suma(pesos * entradas) + sesgo y despues aplica ${activationName}.`,
-        `La salida es de regresion: devuelve un numero real y luego se compara con el objetivo para medir el error.`
+        `Las entradas actuales son ${inputSummary} y se normalizan antes de entrar en la red.`,
+        "Cada capa oculta calcula z = suma(pesos * entradas) + sesgo y despues aplica la activacion configurada en su selector.",
+        "La capa de salida aplica su activacion configurada y luego se compara con el objetivo para medir el error."
       ],
     };
 
@@ -1055,60 +1362,88 @@
         bullets: [
           "Backpropagation no inventa reglas: solo indica que pesos deben subir o bajar para reducir el error.",
           "Si el train loss y el test loss bajan con las epocas, la red esta generalizando mejor.",
-          "El entrenamiento usa 100 ejemplos y luego contrasta con 25 ejemplos de prueba para comprobar si realmente ha aprendido."
+          `El entrenamiento usa ${state.trainingSet.length} ejemplos y luego contrasta con ${state.testSet.length} ejemplos de prueba para comprobar si realmente ha aprendido.`
         ],
       };
     }
 
     if (edgeInfo) {
-      lesson = {
-        title: "Peso y contribucion",
-        tag: edgeInfo.weight >= 0 ? "Peso positivo" : "Peso negativo",
-        body: edgeInfo.weight >= 0
-          ? "Este peso empuja la senal en la misma direccion: si la activacion anterior sube, esta conexion tiende a aumentar la respuesta de la siguiente neurona."
-          : "Este peso compensa o resta parte de la senal: ayuda a que la red corrija, equilibre o reduzca la influencia de la activacion anterior.",
-        formula: `peso=${formatDidacticNumber(edgeInfo.weight, 4)} | contribucion=${formatDidacticNumber(edgeInfo.contribution, 4)}`,
-        bullets: [
-          "Los pesos son los numeros que la red ajusta durante el aprendizaje.",
-          "La contribucion indica cuanto esta aportando esta conexion concreta al calculo de la neurona siguiente.",
-          "Durante el entrenamiento este valor puede subir o bajar para acercar la salida al objetivo real."
-        ],
-      };
+      if (edgeInfo.toLayerType === "output") {
+        const outputActivationLabel = activationLabel(edgeInfo.toActivationName);
+        const isLinearOutput = edgeInfo.toActivationName === "linear";
+        lesson = {
+          title: "Peso hacia la salida",
+          tag: `Salida ${isLinearOutput ? "x" : outputActivationLabel}`,
+          body: isLinearOutput
+            ? "Esta conexion llega a la neurona final. Como la salida usa activacion lineal, la contribucion de este peso pasa a la prediccion sin recortarse ni comprimirse."
+            : `Esta conexion llega a la neurona final. La salida aplica ${outputActivationLabel}, asi que esta contribucion todavia pasara por esa transformacion antes de convertirse en prediccion.`,
+          formula: `peso=${formatDidacticNumber(edgeInfo.weight, 4)} | contribucion=${formatDidacticNumber(edgeInfo.contribution, 4)}`,
+          bullets: [
+            isLinearOutput
+              ? "La activacion x mantiene la escala: f(z)=z."
+              : `La activacion de salida ${outputActivationLabel} modifica el valor final antes de mostrar y.`,
+            isLinearOutput
+              ? "En una regresion interesa dejar la salida libre para predecir cualquier valor real del ejemplo activo."
+              : "Cambiar la activacion de salida altera el rango y el comportamiento final de la prediccion.",
+            "Durante el entrenamiento este peso se ajusta para acercar la prediccion final al objetivo."
+          ],
+        };
+      } else {
+        lesson = {
+          title: "Peso y contribucion",
+          tag: edgeInfo.weight >= 0 ? "Peso positivo" : "Peso negativo",
+          body: edgeInfo.weight >= 0
+            ? "Este peso empuja la senal en la misma direccion: si la activacion anterior sube, esta conexion tiende a aumentar la respuesta de la siguiente neurona."
+            : "Este peso compensa o resta parte de la senal: ayuda a que la red corrija, equilibre o reduzca la influencia de la activacion anterior.",
+          formula: `peso=${formatDidacticNumber(edgeInfo.weight, 4)} | contribucion=${formatDidacticNumber(edgeInfo.contribution, 4)}`,
+          bullets: [
+            "Los pesos son los numeros que la red ajusta durante el aprendizaje.",
+            "La contribucion indica cuanto esta aportando esta conexion concreta al calculo de la neurona siguiente.",
+            "Durante el entrenamiento este valor puede subir o bajar para acercar la salida al objetivo real."
+          ],
+        };
+      }
     } else if (nodeMeta?.type === "input") {
       lesson = {
         title: "Entrada y normalizacion",
         tag: "Entrada",
         body: "Aqui ves el dato crudo que introduces. Antes de viajar por la red se reescala para que los calculos internos no se descompensen por trabajar con numeros demasiado grandes.",
-        formula: `${formatDidacticNumber(displayRun.celsius, 1)} C -> x normalizada = ${formatDidacticNumber(normalizedInput, 3)}`,
+        formula: `${formatValueWithUnit(displayRun.inputs[nodeMeta.neuronIndex], example.inputs[nodeMeta.neuronIndex]?.unit, example.inputs[nodeMeta.neuronIndex]?.digits ?? 1)} -> x normalizada = ${formatDidacticNumber(normalizedInput[nodeMeta.neuronIndex], 3)}`,
         bullets: [
           "Normalizar no cambia el significado del dato: solo cambia su escala para entrenar mejor.",
-          "Este problema parte de una sola entrada, por eso solo ves una neurona a la izquierda.",
-          "La red intenta convertir este valor en Fahrenheit despues de pasar por las capas ocultas."
+          `Este ejemplo trabaja con ${example.inputs.length} ${example.inputs.length === 1 ? "entrada" : "entradas"}, por eso la capa izquierda muestra varios nodos si hace falta.`,
+          "La red intenta aproximar el valor objetivo del ejemplo despues de pasar por las capas ocultas."
         ],
       };
     } else if (nodeMeta?.type === "hidden") {
       lesson = {
         title: `Neurona oculta h${nodeMeta.neuronIndex + 1}`,
-        tag: activationName,
-        body: "Una neurona oculta mezcla lo que recibe, suma un sesgo y aplica una activacion no lineal. Esa no linealidad es la que permite aprender relaciones mas complejas que una simple regla recta.",
-        formula: `z=${formatDidacticNumber(nodeMeta.z, 4)} -> ${activationName}(z) = a=${formatDidacticNumber(nodeMeta.activation, 4)}`,
+        tag: activationLabel(nodeMeta.activationName),
+        body: "Una neurona oculta mezcla lo que recibe, suma un sesgo y aplica la activacion configurada en su capa. Esa transformacion decide como sigue avanzando la senal.",
+        formula: `z=${formatDidacticNumber(nodeMeta.z, 4)} -> ${activationLabel(nodeMeta.activationName)}(z) = a=${formatDidacticNumber(nodeMeta.activation, 4)}`,
         bullets: [
           "z es la suma interna antes de activar la neurona.",
-          `La activacion ${activationName} transforma ese valor y decide que senal sigue avanzando.`,
-          "Sin activacion, varias capas seguidas se comportarian casi como una sola cuenta lineal."
+          `La activacion ${activationLabel(nodeMeta.activationName)} transforma ese valor y decide que senal sigue avanzando.`,
+          "Si varias capas usan solo activacion lineal, la red se comporta casi como una sola cuenta lineal."
         ],
       };
     } else if (nodeMeta?.type === "output") {
       const error = displayRun.target - displayRun.output;
+      const outputActivationLabel = activationLabel(nodeMeta.activationName);
+      const isLinearOutput = nodeMeta.activationName === "linear";
       lesson = {
         title: "Salida de regresion",
-        tag: "Salida",
-        body: "La ultima neurona no elige una clase. Como este problema es de regresion, devuelve directamente un numero real: la temperatura estimada en Fahrenheit.",
-        formula: `y=${formatDidacticNumber(displayRun.output, 2)} F | target=${formatDidacticNumber(displayRun.target, 2)} F | error=${formatDidacticNumber(error, 2)}`,
+        tag: outputActivationLabel,
+        body: isLinearOutput
+          ? "La ultima neurona no elige una clase. Como este problema es de regresion, una salida lineal deja pasar directamente la prediccion final."
+          : `La ultima neurona aplica ${outputActivationLabel} antes de mostrar la prediccion final. Eso cambia como se transforma el valor de salida.`,
+        formula: `y=${formatDidacticNumber(displayRun.output, 2)} ${example.outputUnit} | target=${formatDidacticNumber(displayRun.target, 2)} ${example.outputUnit} | error=${formatDidacticNumber(error, 2)}`,
         bullets: [
           "La salida se compara con el valor real para calcular la perdida.",
           `Si el error es grande, la red tiene que corregir mas sus pesos. Loss actual = ${formatDidacticNumber(displayRun.loss, 3)}.`,
-          "Como aqui queremos un numero continuo, tiene sentido una salida lineal y una perdida de regresion."
+          isLinearOutput
+            ? "Como aqui queremos un numero continuo, normalmente tiene sentido una salida lineal y una perdida de regresion."
+            : "Una salida no lineal puede servir para experimentar, pero cambia el rango disponible para la prediccion."
         ],
       };
     }
@@ -1118,20 +1453,23 @@
     dom.lessonBody.textContent = lesson.body;
     dom.lessonFormula.textContent = lesson.formula;
     dom.lessonBullets.innerHTML = lesson.bullets.map((item) => `<li>${item}</li>`).join("");
-    renderActivationPreview();
+    renderActivationPreview(previewActivationName);
   }
 
   function buildNodeTooltipHtml(meta, currentRun) {
     const title = meta.type === "hidden"
       ? `Neurona ${meta.neuronIndex + 1}`
       : meta.type === "input"
-        ? "Entrada"
+        ? meta.inputLabel || "Entrada"
         : "Salida";
+    const example = currentExample();
     const valueLabel = meta.type === "output"
-      ? `Salida estimada: ${currentRun.output.toFixed(2)} F`
-      : `Activacion: ${meta.activation.toFixed(4)}`;
+      ? `Salida estimada: ${currentRun.output.toFixed(2)} ${example.outputUnit}`
+      : meta.type === "input"
+        ? `Valor normalizado: ${meta.activation.toFixed(4)}`
+        : `Activacion: ${meta.activation.toFixed(4)}`;
     const zLabel = meta.type === "input"
-      ? `Entrada real: ${currentRun.celsius.toFixed(2)} C`
+      ? `Entrada real: ${formatValueWithUnit(currentRun.inputs[meta.neuronIndex], example.inputs[meta.neuronIndex]?.unit, example.inputs[meta.neuronIndex]?.digits ?? 1)}`
       : `z: ${meta.z.toFixed(4)}`;
     const matrixBlocks = [];
     const activationVector = currentRun.activations[meta.layerIndex] || [];
@@ -1172,21 +1510,23 @@
   }
 
   function updateStatusText(metrics, displayRun) {
+    const example = currentExample();
     const hiddenLabel = state.hiddenSizes.length === 1 ? "capa oculta" : "capas ocultas";
+    const inputCount = currentExample().inputs.length;
     const output = displayRun?.output ?? 0;
     const target = displayRun?.target ?? 0;
     const trainLoss = metrics?.trainLoss ?? 0;
     const testLoss = metrics?.testLoss ?? 0;
     const progressText = state.trainingPreview
-      ? ` | epoch=${state.trainingPreview.epochIndex}/${state.trainingPreview.epochCount} | muestra=${state.trainingPreview.sampleIndex}/${state.trainingPreview.sampleCount} | x=${state.trainingPreview.run.celsius.toFixed(1)}`
+      ? ` | epoch=${state.trainingPreview.epochIndex}/${state.trainingPreview.epochCount} | muestra=${state.trainingPreview.sampleIndex}/${state.trainingPreview.sampleCount} | ${formatInputSummary(state.trainingPreview.run.inputs, ", ")}`
       : "";
 
     if (dom.graphStats) {
-      dom.graphStats.textContent = `Arquitectura: 1 entrada | ${state.hiddenSizes.length} ${hiddenLabel} | 1 salida`;
+      dom.graphStats.textContent = `Arquitectura: ${inputCount} ${inputCount === 1 ? "entrada" : "entradas"} | ${state.hiddenSizes.length} ${hiddenLabel} | 1 salida`;
     }
 
     if (dom.connectionHint) {
-      dom.connectionHint.textContent = `y=${output.toFixed(2)} | target=${target.toFixed(2)} | train loss=${trainLoss.toFixed(3)} | test loss=${testLoss.toFixed(3)} | epocas=${state.epochs}${progressText}`;
+      dom.connectionHint.textContent = `y=${formatValueWithUnit(output, example.outputUnit, 2)} | target=${formatValueWithUnit(target, example.outputUnit, 2)} | train loss=${trainLoss.toFixed(3)} | test loss=${testLoss.toFixed(3)} | epocas=${state.epochs}${progressText}`;
     }
   }
 
@@ -1521,7 +1861,8 @@
     dom.svg.innerHTML = "";
     dom.svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
 
-    const layerSizes = [1, ...state.hiddenSizes, 1];
+    const example = currentExample();
+    const layerSizes = [example.inputs.length, ...state.hiddenSizes, 1];
     const layerTitles = ["Entrada", ...state.hiddenSizes.map((_, index) => `Capa oculta ${index + 1}`), "Salida"];
     const layerType = (index) => {
       if (index === 0) return "input";
@@ -1617,9 +1958,11 @@
         });
 
         if (type === "input") {
-          label.textContent = "x1";
-          valueA.textContent = `a=${displayRun.celsius.toFixed(1).replace(/\.0$/, "")}`;
-          valueZ.textContent = `z=${displayRun.celsius.toFixed(1).replace(/\.0$/, "")}`;
+          const inputMeta = example.inputs[neuronIndex];
+          const inputValue = displayRun.inputs[neuronIndex];
+          label.textContent = `x${neuronIndex + 1}`;
+          valueA.textContent = `a=${formatDidacticNumber(layerActivation[neuronIndex], 3)}`;
+          valueZ.textContent = `${inputMeta?.nodeLabel || inputMeta?.shortLabel || `in${neuronIndex + 1}`}=${formatDidacticNumber(inputValue, inputMeta?.digits ?? 1)}`;
         } else if (type === "output") {
           label.textContent = "y";
           valueA.textContent = `a=${displayRun.output.toFixed(2)}`;
@@ -1642,6 +1985,10 @@
           halfWidth: nodeRadius,
           halfHeight: nodeRadius,
           type,
+          activationName: type === "hidden"
+            ? (state.hiddenActivations[layerIndex - 1] || "tanh")
+            : (type === "output" ? state.outputActivation : "linear"),
+          inputLabel: type === "input" ? (example.inputs[neuronIndex]?.label || `Entrada ${neuronIndex + 1}`) : "",
           activation: layerActivation[neuronIndex],
           z: layerZ[neuronIndex],
           group,
@@ -1705,6 +2052,9 @@
             key,
             fromKey,
             toKey,
+            fromLayerType: fromNode.type,
+            toLayerType: toNode.type,
+            toActivationName: toNode.activationName,
             weight,
             contribution,
             line,
@@ -1829,9 +2179,18 @@
       renderActivationPreview();
     };
 
-    dom.celsiusInput?.addEventListener("input", () => {
-      updateTargetField();
+    dom.examplePreset?.addEventListener("change", () => {
+      stopTrainingBatch();
+      applyExamplePreset(dom.examplePreset?.value || "celsius-fahrenheit");
+      resetNetwork();
       render();
+    });
+
+    dom.inputInputs.forEach((input) => {
+      input?.addEventListener("input", () => {
+        updateTargetField();
+        render();
+      });
     });
 
     dom.layerCount?.addEventListener("change", () => {
@@ -1847,7 +2206,14 @@
       });
     });
 
-    dom.activation?.addEventListener("change", () => {
+    dom.layerActivations.forEach((select) => {
+      select?.addEventListener("change", () => {
+        ensureNetwork();
+        render();
+      });
+    });
+
+    dom.outputActivation?.addEventListener("change", () => {
       ensureNetwork();
       render();
     });
@@ -1899,6 +2265,7 @@
   }
 
   async function initializeApp() {
+    applyExamplePreset(dom.examplePreset?.value || "celsius-fahrenheit");
     await prepareTensorFlow();
     updateTargetField();
     updateLayerControls();
